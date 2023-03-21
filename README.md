@@ -12,7 +12,7 @@ We have performed tests using Promela and Spin to the state machines of the crea
 
 ##### Creation of the Tree:
 
- These tests verify if the tree is created correctly meaning that all router eventually reach the desired state.
+ These tests verify if the tree is created correctly, meaning that all routers eventually reach the desired state.
 
 
  |   | File Name | Test description |
@@ -22,7 +22,7 @@ We have performed tests using Promela and Spin to the state machines of the crea
  
 ##### Creation of the Tree:
 
- These tests verify if the tree is created correctly meaning that all router eventually reach the desired state when there is a need for reconfigurations.
+ These tests verify if the tree is created correctly, meaning that all routers eventually reach the desired state when there is a need for reconfigurations.
 
  |   | File Name | Test description |
  |:---:|:---:|:---:|
@@ -38,5 +38,9 @@ We have performed tests using Promela and Spin to the state machines of the crea
  |:---:|:---:|:---:|
  | 1 | [remove_tree_r3_r4_stays.pml](./Remove_Tree/R3_R4_in_and_R3_removed/remove_tree_r3_r4_stays.pml) | Removal of R3 from the tree |
  | 2 | [remove_tree_r4_r3_stays.pml](./Remove_Tree/R3_R4_in_and_R4_removed/remove_tree_r4_r3_stays.pml) | Removal of R4 from the tree |
+
+##### Network Topology:
+
+ In the network, R0 is the potential AW of R1 and R2, whereas R1 and R2 are the potential AW of R3 and R4, respectively. R1 has a better RPC than R2. Router R0 is connected to a source through interface e0. Each router's root interface was selected manually, as were the Potential AWs.
 
  ![Promela Topologies](./Promela_network.png)

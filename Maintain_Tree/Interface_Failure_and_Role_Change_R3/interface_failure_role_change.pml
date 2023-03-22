@@ -1,6 +1,6 @@
 /*Define topology*/
 #define NODES 5 /*Number of routers*/
-#define NB_OF_INTERFACES 9 /*Number of interfaces*/
+#define NB_OF_INTERFACES 12 /*Number of interfaces*/
 
 #define BUFFER_SIZE 4
 #define INFINITE_METRIC 255 /*For the RPC in AssertCancel*/
@@ -431,7 +431,6 @@ inline interfaceFailure(node_id, interface_id){
 
        clearInterface(node_id, interface_id, last_type);
        INTERFACE_TYPE(node_id, interface_id) = not_interface;
-       ROUTER_INTEREST(node_id) = ni;
 
     
     :: INTERFACE_TYPE(node_id, interface_id) == non_root ->
@@ -444,7 +443,6 @@ inline interfaceFailure(node_id, interface_id){
 
        clearInterface(node_id, interface_id, last_type);
        INTERFACE_TYPE(node_id, interface_id) = not_interface;
-       ROUTER_INTEREST(node_id) = ni;
 
     :: else ->
       skip;
@@ -468,29 +466,35 @@ init {
   node_info[1].node_interface[3].potential_aw = 1
   node_info[1].neighbors_at_each_interface[3] = (1 << 1)
   node_info[1].node_interface[5].interface_type = non_root
-  node_info[1].neighbors_at_each_interface[5] = (1 << 6) | (1 << 7) | (1 << 8)
+  node_info[1].neighbors_at_each_interface[5] = (1 << 8)
+  node_info[1].node_interface[6].interface_type = non_root
+  node_info[1].neighbors_at_each_interface[6] = (1 << 7) | (1 << 9)
 
   /*Node 2 initial conf*/
   node_info[2].my_rpc = 15
   node_info[2].node_interface[4].interface_type = root
   node_info[2].node_interface[4].potential_aw = 2
   node_info[2].neighbors_at_each_interface[4] = (1 << 2)
-  node_info[2].node_interface[6].interface_type = non_root
-  node_info[2].node_interface[6].potential_aw = 5
-  node_info[2].neighbors_at_each_interface[6] = (1 << 5) | (1 << 7) | (1 << 8)
+  node_info[2].node_interface[7].interface_type = non_root
+  node_info[2].neighbors_at_each_interface[7] = (1 << 6) | (1 << 9)
 
 
   /*Node 3 initial conf*/
   node_info[3].my_rpc = 20
-  node_info[3].node_interface[7].interface_type = root
-  node_info[3].node_interface[7].potential_aw = 5
-  node_info[3].neighbors_at_each_interface[7] = (1 << 5) | (1 << 6) | (1 << 8)
+  node_info[3].node_interface[9].interface_type = root
+  node_info[3].node_interface[9].potential_aw = 6
+  node_info[3].neighbors_at_each_interface[9] = (1 << 6) | (1 << 7)
+  node_info[3].node_interface[8].interface_type = non_root
+  node_info[3].node_interface[8].potential_aw = 5
+  node_info[3].neighbors_at_each_interface[8] = (1 << 5)
+  node_info[3].node_interface[10].interface_type = non_root
+  node_info[3].neighbors_at_each_interface[10] = (1 << 11)
 
   /*Node 4 initial conf*/
   node_info[4].my_rpc = 25
-  node_info[4].node_interface[8].interface_type = root
-  node_info[4].node_interface[8].potential_aw = 6
-  node_info[4].neighbors_at_each_interface[8] = (1 << 5) | (1 << 6) | (1 << 7)
+  node_info[4].node_interface[11].interface_type = root
+  node_info[4].node_interface[11].potential_aw = 10
+  node_info[4].neighbors_at_each_interface[11] = (1 << 10)
 
   atomic{
 
@@ -508,37 +512,43 @@ init {
     run InterfaceSend(1,5);
     run InterfaceReceive(1,5);
 
+    run InterfaceSend(1,6);
+    run InterfaceReceive(1,6);
+
     /*Node 2*/
     run InterfaceSend(2,4);
     run InterfaceReceive(2,4);
 
-    run InterfaceSend(2,6);
-    run InterfaceReceive(2,6);
+    run InterfaceSend(2,7);
+    run InterfaceReceive(2,7);
 
     /*Node 3*/
-    run InterfaceSend(3,7);
-    run InterfaceReceive(3,7);
+    run InterfaceSend(3,8);
+    run InterfaceReceive(3,8);
+
+    run InterfaceSend(3,9);
+    run InterfaceReceive(3,9);
+
+    run InterfaceSend(3,10);
+    run InterfaceReceive(3,10);
 
     /*Node 4*/
-    run InterfaceSend(4,8);
-    run InterfaceReceive(4,8);
-
+    run InterfaceSend(4,11);
+    run InterfaceReceive(4,11);
+    
     node_info[4].router_interest = in      
-    node_info[3].router_interest = in      
   } 
 
   atomic{
-
-    //Changing the Potential AW of R4 to be the root interface of R3
-    rpcChange(1, 25);
+    interfaceFailure(3,9);
+    unicastChange(3, 8, root);
   }
 }
 
-/*Verification for RPC of R1 changes*/
-ltl ltl_test {(<>([](ROUTER_INTEREST(0)==in && ROUTER_INTEREST(1)==ni && ROUTER_INTEREST(2)==in &&
-  DOWNSTREAM_INTEREST(0,1)==ndi && DOWNSTREAM_INTEREST(0,2)==di && DOWNSTREAM_INTEREST(1,5)==di && DOWNSTREAM_INTEREST(2,6)==di &&
-  INTERFACE_ASSERT_STATE(0,1)==na && INTERFACE_ASSERT_STATE(0,2)==aw && INTERFACE_ASSERT_STATE(1,5)==al && INTERFACE_ASSERT_STATE(2,6)==aw)))}
-
+/*Verification for when root interface of R2 becomes non_root and the non_root interface becomes root */
+ltl ltl_test {(<>([](ROUTER_INTEREST(0)==in && ROUTER_INTEREST(1)==in && ROUTER_INTEREST(2)==ni &&
+  DOWNSTREAM_INTEREST(0,1)==di && DOWNSTREAM_INTEREST(0,2)==ndi && DOWNSTREAM_INTEREST(1,5)==di && DOWNSTREAM_INTEREST(1,6)==ndi && DOWNSTREAM_INTEREST(2,7)==ndi && DOWNSTREAM_INTEREST(3,10)==di &&
+  INTERFACE_ASSERT_STATE(0,1)==aw && INTERFACE_ASSERT_STATE(0,2)==na && INTERFACE_ASSERT_STATE(1,5)==aw && INTERFACE_ASSERT_STATE(1,6)==na && INTERFACE_ASSERT_STATE(2,7)==na)))}
 
 
   

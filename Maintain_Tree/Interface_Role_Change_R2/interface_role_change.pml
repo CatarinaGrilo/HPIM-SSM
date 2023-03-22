@@ -332,6 +332,8 @@ atomic{
     /*Non_root becomes root*/
   :: INTERFACE_TYPE(node_id, interface_id) == root && last_interface_type == non_root  ->
      if 
+     :: ROUTER_INTEREST(node_id) == in && was_in_tree == in->
+          sendMsgUnicast(node_id, join_msg, interface_id, 0, INTERFACE_POTENTIAL_AW(node_id, interface_id));
      :: DOWNSTREAM_INTEREST(node_id, interface_id) == di || INTERFACE_INTEREST(node_id, interface_id) == true->
         sendMsg(node_id, assert_msg, interface_id, INFINITE_METRIC); //Send assertCancel
         UPSTREAM_INTEREST(node_id, interface_id) = ui; //If it was di it has interested neighbours so it becomes ui
@@ -347,7 +349,7 @@ atomic{
   /*Root becomes non_root*/
   :: INTERFACE_TYPE(node_id, interface_id) == non_root && last_interface_type == root ->
      if 
-     :: ROUTER_INTEREST(node_id) == in ->
+     :: ROUTER_INTEREST(node_id) == in && was_in_tree == in ->
           sendMsgUnicast(node_id, prune_msg, interface_id, 0, INTERFACE_POTENTIAL_AW(node_id, interface_id));
 
       /* If it has interested neighbors*/

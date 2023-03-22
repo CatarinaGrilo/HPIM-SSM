@@ -545,7 +545,7 @@ init {
   }
 }
 
-/*Verification for when root interface of R2 becomes non_root and the non_root interface becomes root */
+/*Verification for when root interface of R3 fails causing interface e8 to become root */
 ltl ltl_test {(<>([](ROUTER_INTEREST(0)==in && ROUTER_INTEREST(1)==in && ROUTER_INTEREST(2)==ni &&
   DOWNSTREAM_INTEREST(0,1)==di && DOWNSTREAM_INTEREST(0,2)==ndi && DOWNSTREAM_INTEREST(1,5)==di && DOWNSTREAM_INTEREST(1,6)==ndi && DOWNSTREAM_INTEREST(2,7)==ndi && DOWNSTREAM_INTEREST(3,10)==di &&
   INTERFACE_ASSERT_STATE(0,1)==aw && INTERFACE_ASSERT_STATE(0,2)==na && INTERFACE_ASSERT_STATE(1,5)==aw && INTERFACE_ASSERT_STATE(1,6)==na && INTERFACE_ASSERT_STATE(2,7)==na)))}

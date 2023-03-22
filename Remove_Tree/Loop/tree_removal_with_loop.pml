@@ -523,7 +523,7 @@ init {
   }
 }
 
-/*Verification for when only router R4 is interested */
+/*Verification for when there is a loop, R2 and r3 are I and then are NI. Verifies the removal of the tree*/
 ltl ltl_test {(<>([](ROUTER_INTEREST(0)==ni && ROUTER_INTEREST(1)==ni && ROUTER_INTEREST(2)==ni &&
   DOWNSTREAM_INTEREST(0,1)==ndi && DOWNSTREAM_INTEREST(1,4)==ndi && DOWNSTREAM_INTEREST(1,6)==ndi &&
   INTERFACE_ASSERT_STATE(0,1)==na && INTERFACE_ASSERT_STATE(1,4)==na && INTERFACE_ASSERT_STATE(1,6)==na && INTERFACE_ASSERT_STATE(2,3)==na)))}

@@ -34,6 +34,11 @@ We have performed tests using Promela and Spin on the state machines of the crea
  | 2 | [change_PAW_r4.pml](./Maintain_Tree/Change_PotentialAW_R4/change_PAW_r4.pml) | Maintenance of the tree with changes in the Potential AW of R4 |
  | 3 | [change_RPC_r1.pml](./Maintain_Tree/Change_RPC_R1/change_RPC_r1.pml) | Maintenance of the tree with changes in the RPC of R1 |
 
+ |   | File Name | Test description Topology 2 |
+ |:---:|:---:|:---:|
+ | 1 | [interface_failure_role_change.pml](./Maintain_Tree/Interface_Failure_and_Role_Change_R3/interface_failure_role_change.pml) | Maintenance of the tree with interface failure cause role changes |
+ 
+
 ##### Removal of the Tree:
 
  These tests verify if the tree is correctly removed.

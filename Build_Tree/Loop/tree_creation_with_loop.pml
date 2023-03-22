@@ -517,7 +517,7 @@ init {
   }
 }
 
-/*Verification for when only router R4 is interested */
+/*Verification for when there is a loop, R2 and r3 are I */
 ltl ltl_test {(<>([](ROUTER_INTEREST(0)==in && ROUTER_INTEREST(1)==in && ROUTER_INTEREST(2)==in &&
   DOWNSTREAM_INTEREST(0,1)==di && DOWNSTREAM_INTEREST(1,4)==di && DOWNSTREAM_INTEREST(1,6)==di &&
   INTERFACE_ASSERT_STATE(0,1)==aw && INTERFACE_ASSERT_STATE(1,4)==aw && INTERFACE_ASSERT_STATE(1,6)==aw && INTERFACE_ASSERT_STATE(2,3)==na)))}

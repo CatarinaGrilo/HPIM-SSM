@@ -8,7 +8,7 @@ gcc -O2 -o pan pan.c -DCOLLAPSE -DVECTORSZ=15000
 ```
 
 #### Tests:
-We have performed tests using Promela and Spin to the state machines of the creation, maintenance, and removal of trees.
+We have performed tests using Promela and Spin on the state machines of the creation, maintenance, and removal of trees.
 
 ##### Creation of the Tree:
 
@@ -20,7 +20,7 @@ We have performed tests using Promela and Spin to the state machines of the crea
  | 1 | [build_tree_r4.pml](./Build_Tree/R4_in/build_tree_r4.pml) | Tree creation when only router R4 is interested |
  | 2 | [build_tree_r4_r3.pml](./Build_Tree/R3_R4_in/build_tree_r4_r3.pml) | Tree creation when R3 and R4 are interested |
  
-##### Creation of the Tree:
+##### Maintenance of the Tree:
 
  These tests verify if the tree is created correctly, meaning that all routers eventually reach the desired state when there is a need for reconfigurations.
 
@@ -41,6 +41,6 @@ We have performed tests using Promela and Spin to the state machines of the crea
 
 ##### Network Topology:
 
- In the network, R0 is the potential AW of R1 and R2, whereas R1 and R2 are the potential AW of R3 and R4, respectively. R1 has a better RPC than R2. Router R0 is connected to a source through interface e0. Each router's root interface was selected manually, as were the Potential AWs.
+ In the network, router R0 is the potential AW of routers R1 and R2, whereas routers R1 and R2 are the potential AW of routers R3 and R4, respectively. Router R1 has a better RPC than router R2. Router R0 is connected to a source through interface e0. Each router's root interface was selected manually, as were the Potential AWs.
 
  ![Promela Topologies](./Promela_network.png)

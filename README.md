@@ -36,7 +36,7 @@ We have performed tests using Promela and Spin on the state machines of the crea
 
  |   | File Name | Test description Topology 2 |
  |:---:|:---:|:---:|
- | 1 | [interface_failure_role_change.pml](./Maintain_Tree/Interface_Failure_and_Role_Change_R3/interface_failure_role_change.pml) | Maintenance of the tree with interface failure cause role changes |
+ | 1 | [interface_failure_role_change.pml](./Maintain_Tree/Interface_Failure_and_Role_Change_R3/interface_failure_role_change.pml) | Maintenance of the tree with interface failure causing role change |
  
 
 ##### Removal of the Tree:
@@ -54,6 +54,9 @@ We have performed tests using Promela and Spin on the state machines of the crea
 
 ##### Network Topologies:
 
- In the network, router R0 is the potential AW of routers R1 and R2, whereas routers R1 and R2 are the potential AW of routers R3 and R4, respectively. Router R1 has a better RPC than router R2. Router R0 is connected to a source through interface e0. Each router's root interface was selected manually, as were the Potential AWs.
-
+ In all topologies each router's root interface was selected manually, as were the Potential AWs.
+ In topology 1, router R0 is the potential AW of routers R1 and R2, whereas routers R1 and R2 are the potential AW of routers R3 and R4, respectively. Router R1 has a better RPC than router R2. Router R0 is connected to a source through interface e0. 
+ In topology 2, router R0 is the potential AW of routers R1 and R2, router R1 is the potential AW of router R3, and router R3 is the potential AW of R4. Interface e9 is the root interface of router R3.
+ In topology 3, router R0 is the potential AW of router R1, router R1 is the potential AW of routers R2 and R3. Therefore, interface e5 is the root interface of router R2.
+ 
  ![Promela Topologies](./Promela_network.png)

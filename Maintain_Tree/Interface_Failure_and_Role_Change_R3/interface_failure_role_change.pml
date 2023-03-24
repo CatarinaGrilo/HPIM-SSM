@@ -466,27 +466,27 @@ init {
   node_info[1].node_interface[3].potential_aw = 1
   node_info[1].neighbors_at_each_interface[3] = (1 << 1)
   node_info[1].node_interface[5].interface_type = non_root
-  node_info[1].neighbors_at_each_interface[5] = (1 << 8)
-  node_info[1].node_interface[6].interface_type = non_root
-  node_info[1].neighbors_at_each_interface[6] = (1 << 7) | (1 << 9)
+  node_info[1].neighbors_at_each_interface[5] = (1 << 6) | (1 << 8)
 
   /*Node 2 initial conf*/
   node_info[2].my_rpc = 15
   node_info[2].node_interface[4].interface_type = root
   node_info[2].node_interface[4].potential_aw = 2
   node_info[2].neighbors_at_each_interface[4] = (1 << 2)
+  node_info[2].node_interface[6].interface_type = non_root
+  node_info[2].neighbors_at_each_interface[6] = (1 << 5) | (1 << 8)
   node_info[2].node_interface[7].interface_type = non_root
-  node_info[2].neighbors_at_each_interface[7] = (1 << 6) | (1 << 9)
+  node_info[2].neighbors_at_each_interface[7] = (1 << 9)
 
 
   /*Node 3 initial conf*/
   node_info[3].my_rpc = 20
-  node_info[3].node_interface[9].interface_type = root
-  node_info[3].node_interface[9].potential_aw = 6
-  node_info[3].neighbors_at_each_interface[9] = (1 << 6) | (1 << 7)
-  node_info[3].node_interface[8].interface_type = non_root
-  node_info[3].node_interface[8].potential_aw = 5
-  node_info[3].neighbors_at_each_interface[8] = (1 << 5)
+  node_info[3].node_interface[8].interface_type = root
+  node_info[3].node_interface[8].potential_aw = 6
+  node_info[3].neighbors_at_each_interface[8] = (1 << 5) | (1 << 6)
+  node_info[3].node_interface[9].interface_type = non_root
+  node_info[3].node_interface[9].potential_aw = 7
+  node_info[3].neighbors_at_each_interface[9] = (1 << 7)
   node_info[3].node_interface[10].interface_type = non_root
   node_info[3].neighbors_at_each_interface[10] = (1 << 11)
 
@@ -512,12 +512,12 @@ init {
     run InterfaceSend(1,5);
     run InterfaceReceive(1,5);
 
-    run InterfaceSend(1,6);
-    run InterfaceReceive(1,6);
-
     /*Node 2*/
     run InterfaceSend(2,4);
     run InterfaceReceive(2,4);
+
+    run InterfaceSend(2,6);
+    run InterfaceReceive(2,6);
 
     run InterfaceSend(2,7);
     run InterfaceReceive(2,7);
@@ -540,16 +540,16 @@ init {
   } 
 
   atomic{
-    interfaceFailure(3,9);
-    unicastChange(3, 8, root);
+    interfaceFailure(3,8);
+    unicastChange(3, 9, root);
   }
 }
 
-/*Verification for when root interface of R3 fails causing interface e8 to become root */
-ltl ltl_test {(<>([](ROUTER_INTEREST(0)==in && ROUTER_INTEREST(1)==in && ROUTER_INTEREST(2)==ni && ROUTER_INTEREST(3)==in && ROUTER_INTEREST(4)==in &&
-  DOWNSTREAM_INTEREST(0,1)==di && DOWNSTREAM_INTEREST(0,2)==ndi && DOWNSTREAM_INTEREST(1,5)==di && DOWNSTREAM_INTEREST(1,6)==ndi && DOWNSTREAM_INTEREST(2,7)==ndi && DOWNSTREAM_INTEREST(3,10)==di &&
-  INTERFACE_ASSERT_STATE(0,1)==aw && INTERFACE_ASSERT_STATE(0,2)==na && INTERFACE_ASSERT_STATE(1,5)==aw && INTERFACE_ASSERT_STATE(1,6)==na && INTERFACE_ASSERT_STATE(2,7)==na &&
-  INTERFACE_TYPE(3,8)==root)))}
+/*Verification for when root interface of R3 fails causing interface e9 to become root */
+ltl ltl_test {(<>([](ROUTER_INTEREST(0)==in && ROUTER_INTEREST(1)==ni && ROUTER_INTEREST(2)==in && ROUTER_INTEREST(3)==in && ROUTER_INTEREST(4)==in &&
+  DOWNSTREAM_INTEREST(0,1)==ndi && DOWNSTREAM_INTEREST(0,2)==di && DOWNSTREAM_INTEREST(1,5)==ndi && DOWNSTREAM_INTEREST(1,6)==ndi && DOWNSTREAM_INTEREST(2,7)==di && DOWNSTREAM_INTEREST(3,10)==di &&
+  INTERFACE_ASSERT_STATE(0,1)==na && INTERFACE_ASSERT_STATE(0,2)==aw && INTERFACE_ASSERT_STATE(1,5)==na && INTERFACE_ASSERT_STATE(1,6)==na && INTERFACE_ASSERT_STATE(2,7)==aw &&
+  INTERFACE_TYPE(3,9)==root)))}
 
 
   

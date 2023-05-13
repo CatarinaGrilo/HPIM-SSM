@@ -1,4 +1,4 @@
-import pickle #import _pickle as pickle#
+import pickle
 import argparse
 import os
 import socket
@@ -119,9 +119,9 @@ class MyDaemon(Daemon):
 
 def main():
     """
-    Entry point for HPIM-SM
+    Entry point for HPIM-SSM
     """
-    parser = argparse.ArgumentParser(description='HPIM-SM protocol', prog='hpim-sm')
+    parser = argparse.ArgumentParser(description='HPIM-SSM protocol', prog='hpim-ssm')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-start", "--start", action="store_true", default=False,
                        help="Start Protocol")
@@ -134,7 +134,7 @@ def main():
     group.add_argument("-ln", "--list_neighbors", action="store_true", default=False,
                        help="List All Neighbors")
     group.add_argument("-ls", "--list_state", action="store_true", default=False,
-                       help="List state of IGMP and HPIM-SM")
+                       help="List state of IGMP and HPIM-SSM")
     group.add_argument("-lns", "--list_neighbors_state", action="store_true", default=False,
                        help="List Upstream and Interest state of all neighbors")
     group.add_argument("-lsn", "--list_sequence_numbers", action="store_true", default=False,
@@ -145,11 +145,11 @@ def main():
                        help="Hold forwarding state during a small amount of time after AW interface becomes AL " +\
                             "(prevent loss of data packets after AW replacement)")
     group.add_argument("-ai", "--add_interface", nargs=1, metavar='INTERFACE_NAME',
-                       help="Add HPIM-SM interface")
+                       help="Add HPIM-SSM interface")
     group.add_argument("-aiigmp", "--add_interface_igmp", nargs=1, metavar='INTERFACE_NAME',
                        help="Add IGMP interface")
     group.add_argument("-ri", "--remove_interface", nargs=1, metavar='INTERFACE_NAME',
-                       help="Remove HPIM-SM interface")
+                       help="Remove HPIM-SSM interface")
     group.add_argument("-riigmp", "--remove_interface_igmp", nargs=1, metavar='INTERFACE_NAME',
                        help="Remove IGMP interface")
     group.add_argument("-lsec", "--list_hmac_algorithms", action="store_true", default=False,
@@ -173,7 +173,7 @@ def main():
     #print(parser.parse_args())
     # This script must be run as root!
     if os.geteuid() != 0:
-        sys.exit('HPIM-SM must be run as root!')
+        sys.exit('HPIM-SSM must be run as root!')
 
     daemon = MyDaemon('/tmp/Daemon-hpim.pid')
     if args.start:
@@ -188,13 +188,13 @@ def main():
         daemon.restart()
         sys.exit(0)
     elif args.verbose:
-        os.system("tail -f /var/log/hpimsm/stdout")
+        os.system("tail -f /var/log/hpimssm/stdout")
         sys.exit(0)
     elif args.multicast_routes:
         os.system("ip mroute show")
         sys.exit(0)
     elif not daemon.is_running():
-        print("HPIM-SM is not running")
+        print("HPIM-SSM is not running")
         parser.print_usage()
         sys.exit(0)
 

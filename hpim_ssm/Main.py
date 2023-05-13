@@ -19,7 +19,7 @@ logger = None
 
 def add_protocol_interface(interface_name):
     """
-    Add a new interface to be controlled by HPIM-SM
+    Add a new interface to be controlled by HPIM-SSM
     """
     print("in Main: add protocol interface")
     kernel.create_protocol_interface(interface_name=interface_name)
@@ -48,7 +48,7 @@ def add_igmp_interface(interface_name):
 
 def remove_interface(interface_name, pim=False, igmp=False):
     """
-    Remove HPIM-SM/IGMP interface
+    Remove HPIM-SSM/IGMP interface
     """
     kernel.remove_interface(interface_name, pim=pim, igmp=igmp)
 
@@ -73,7 +73,7 @@ def list_neighbors():
 
 def list_enabled_interfaces():
     """
-    List all interfaces of the machine (enabled and not enabled for HPIM-SM and IGMP)
+    List all interfaces of the machine (enabled and not enabled for HPIM-SSM and IGMP)
     """
     t = PrettyTable(['Interface', 'IP', 'HPIM/IGMP Enabled', 'HPIM security', 'IGMP State'])
     for interface in netifaces.interfaces():
@@ -98,9 +98,9 @@ def list_enabled_interfaces():
 
 def list_state():
     """
-    List IGMP and HPIM-SM state
+    List IGMP and HPIM-SSM state
     For IGMP list the state of each group, regarding each interface
-    For HPIM-SM list all trees and state of each interface
+    For HPIM-SSM list all trees and state of each interface
     """
     state_text = "\n\n\n\n" + "Multicast Routing State:\n" + list_routing_state()
     return state_text
@@ -173,7 +173,7 @@ def list_neighbors_state():
 
 def list_routing_state():
     """
-    List HPIM-SM state (all state machines of each tree, regarding each interface)
+    List HPIM-SSM state (all state machines of each tree, regarding each interface)
     """
     routing_entries = []
     for a in list(kernel.routing.values()):

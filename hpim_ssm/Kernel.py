@@ -79,8 +79,7 @@ class Kernel:
 
         self.protocol_interface = {} # name: interface_protocol
         self.igmp_interface = {}  # name: interface_igmp
-        self.igmp_interest = {}
-
+        
         # logs
         self.interface_logger = Main.logger.getChild('KernelInterface')
         self.tree_logger = Main.logger.getChild('KernelTree')
@@ -365,21 +364,22 @@ class Kernel:
 
     # receive multicast (S,G) packet and multicast routing table has no (S,G) entry
     def igmpmsg_nocache_handler(self, ip_src, ip_dst, iif):
-        (_, _, is_directly_connected, rpf_if,_) = UnicastRouting.get_unicast_info(ip_src)
+        # (_, _, is_directly_connected, rpf_if,_) = UnicastRouting.get_unicast_info(ip_src)
 
-        with self.rwlock.genWlock():
-            if ip_src in self.routing and ip_dst in self.routing[ip_src]:
-                self.routing[ip_src][ip_dst].recv_data_msg(iif)
-            elif is_directly_connected:
-                if protocol_globals.INITIAL_FLOOD_ENABLED:
-                    # flood
-                    self.set_flood_multicast_route(ip_src, ip_dst, rpf_if)
-                if rpf_if is not None:
-                    self.create_entry(ip_src, ip_dst)
-                    self.routing[ip_src][ip_dst].recv_data_msg(iif)
-            elif not is_directly_connected and protocol_globals.INITIAL_FLOOD_ENABLED:
-                # flood
-                self.set_flood_multicast_route(ip_src, ip_dst, rpf_if)
+        # with self.rwlock.genWlock():
+        #     if ip_src in self.routing and ip_dst in self.routing[ip_src]:
+        #         self.routing[ip_src][ip_dst].recv_data_msg(iif)
+        #     elif is_directly_connected:
+        #         if protocol_globals.INITIAL_FLOOD_ENABLED:
+        #             # flood
+        #             self.set_flood_multicast_route(ip_src, ip_dst, rpf_if)
+        #         if rpf_if is not None:
+        #             self.create_entry(ip_src, ip_dst)
+        #             self.routing[ip_src][ip_dst].recv_data_msg(iif)
+        #     elif not is_directly_connected and protocol_globals.INITIAL_FLOOD_ENABLED:
+        #         # flood
+        #         self.set_flood_multicast_route(ip_src, ip_dst, rpf_if)
+        return
 
 
 
@@ -483,7 +483,7 @@ class Kernel:
 
                 if kernel_entry.get_tree_interface(vif_index).is_downstream() and tree is not False:
                     trees_to_sync[(ip_src, ip_dst)] = tree
-                elif not kernel_entry.get_tree_interface(vif_index).is_downstream() and tree:
+                elif not kernel_entry.get_tree_interface(vif_index).is_downstream() and tree is None:
                     trees_to_sync[(ip_src, ip_dst)] = tree
         return trees_to_sync
 

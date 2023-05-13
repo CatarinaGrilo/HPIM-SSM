@@ -107,10 +107,9 @@ class TreeInterfaceDownstream(TreeInterface):
 
     def get_sync_state(self, neighbor_ip):
         if self.are_downstream_nodes_interested():
-            return self._my_assert_rpc
+            return (self._my_assert_rpc)
         else:
             return False
-            #return AssertMetric.infinite_assert_metric()
 
     ##########################################################
     def is_forwarding(self):

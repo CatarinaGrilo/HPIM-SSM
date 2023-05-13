@@ -60,7 +60,7 @@ class TreeInterfaceUpstream(TreeInterface):
             try:
                 self.socket_pkt.recvfrom(0)
                 #print("PACOTE DADOS RECEBIDO")
-                #self.logger.debug('Data packet received')
+                self.logger.debug('Data packet received')
                 self.recv_data_msg()
             except:
                 traceback.print_exc()
@@ -223,9 +223,10 @@ class TreeInterfaceUpstream(TreeInterface):
          otherwise this tree is not included in the snapshot
         """
         if not self.is_interface_connected_to_source():
-            #print("neighbor ip: "+ str(neighbor_ip)+ " potential_AW ip: " + str(self._kernel_entry.potential_aw)+"\n\n\n\n")
+            print("neighbor ip: "+ str(neighbor_ip)+ " potential_AW ip: " + str(self._kernel_entry.potential_aw)+"\n\n\n\n")
+            print("node is in tree: " + str(self.is_node_in_tree()))
             if self.is_node_in_tree() and neighbor_ip == self._kernel_entry.potential_aw:
-                return AssertMetric.infinite_assert_metric()
+                return (None)
             else:
                 return False
         else:

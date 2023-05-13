@@ -25,7 +25,7 @@ if MSG_FORMAT == "BINARY":
     from Packet.PacketProtocolHello import PacketNewProtocolHello as PacketProtocolHello
     from Packet.PacketProtocolHeader import PacketNewProtocolHeader as PacketProtocolHeader
     from Packet.PacketProtocolSync import PacketNewProtocolSyncEntry as PacketProtocolHelloSyncEntry, \
-        PacketNewProtocolSync as PacketProtocolHelloSync
+        PacketNewProtocolSync as PacketProtocolHelloSync, PacketNewProtocolSyncMetric
     from Packet.PacketProtocolInterest import PacketNewProtocolPrune as PacketProtocolPrune, \
         PacketNewProtocolJoin as PacketProtocolJoin
     from Packet.PacketProtocolAssert import PacketNewProtocolAssert as PacketProtocolAssert
@@ -332,15 +332,26 @@ class InterfaceProtocol(Interface):
 
                 trees_to_sync = Main.kernel.snapshot_multicast_routing_table(self.vif_index, neighbor_ip)  # type: dict
                 tree_to_sync_in_msg_format = {}
+                metric = []
 
                 for (source_group, state) in trees_to_sync.items():
                     self.interface_logger.debug('added tree in sync message: router is interested!')
                     #print("NA SNAPSHOT NA INTERFACEPROTOCOL")
                     #print("O STATE E")
                     #print(str(state))
+                    if state is None:
+                        metric_flag = 0
+                        print("\n\nSYNC JOIN")
+                    else:
+                        metric_flag = 1
+                        metric_value = PacketNewProtocolSyncMetric(state.metric_preference, state.route_metric)
+                        print("\n\nSYNC ASSERT METRIC: " + str(metric_value.metric) + ' ' + str(metric_value.metric_preference) +'\n\n')
+                        metric.append(metric_value)
 
-                    tree_to_sync_in_msg_format[source_group] = PacketProtocolHelloSyncEntry(source_group[0],
-                                                                source_group[1], state.metric_preference, state.route_metric)
+                    tree_to_sync_in_msg_format[source_group] = PacketProtocolHelloSyncEntry(metric_flag, source_group[0],
+                                                                source_group[1], metric)
+                    #print(len(metric))
+                    #print("\n\nTREE SYNC: " + str(tree_to_sync_in_msg_format[source_group].assert_metric[0].metric) + '\n\n')
 
 
                 return (snapshot_bt, snapshot_sn, tree_to_sync_in_msg_format)

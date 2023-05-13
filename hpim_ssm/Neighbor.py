@@ -393,20 +393,22 @@ class Neighbor:
         Interest/NoInterest messages concurrently to an ongoing synchronization, verify if
         trees included in Sync message have state fresher than the one that is already stored (in a non-Sync message)
         """
-        #print("TREE STATE:")
-        #print(tree_state)
+        # print("\n\n\nTREE STATE:")
+        # print(tree_state)
         for t in tree_state:
             tree_id = (t.source, t.group)
+            metric_flag = t.metric_flag
+            assert_metric = t.assert_metric
+            # print("\n\nSYNC ASSERT METRIC: " + str(assert_metric) + '\n\n')
             if self.last_sequence_number.get(tree_id, 0) > self.neighbor_snapshot_sn:
                 continue
 
             # if t.metric_preference == 0x7FFFFFFF and t.metric == 0xFFFFFFFF:
-            if t.metric_preference == 2147483647 and t.metric == 4294967295:
-                pass
-                self.tree_interest_state[tree_id] = True
+            if metric_flag:
+                self.tree_metric_state[tree_id] = AssertMetric(metric_preference=assert_metric[0].metric_preference,
+                                                               route_metric=assert_metric[0].metric, ip_address=self.ip)
             else:
-                self.tree_metric_state[tree_id] = AssertMetric(metric_preference=t.metric_preference,
-                                                               route_metric=t.metric, ip_address=self.ip)
+                self.tree_interest_state[tree_id] = True
 
     def remove_tree_state(self, source, group):
         """

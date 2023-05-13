@@ -86,30 +86,24 @@ class GroupState:
 
     def group_timeout(self):
         print("GROUP TIMEOUT")
+        #print('risk: ', self.sources_in_risk_to_exclude)
         for source in self.sources_in_risk_to_exclude:
+            #print('HERE1')
             if source in self.source_addresses:
-                if self.filter_mode == GroupState.INCLUDE:
+                    #print('HERE2')
+                    self.clear_source_timer(source)
                     self.source_addresses.pop(source)
-                    self.notify_routing_remove(source.getAddress())
-                    self.sources_in_risk_to_exclude.pop(source)
-                else: 
-                    self.sources_in_risk_to_exclude.pop(source)
-        #print("len:")
-        #print(len(self.source_addresses))
+                    self.sources_in_risk_to_exclude.remove(source)
+                    self.notify_routing_remove(source)
         if len(self.source_addresses) == 0:
             self.filter_mode = GroupState.INCLUDE
         #if all source timers have expired => delete group 
         cntr = True
         for source in self.source_addresses:
             if self.source_addresses[source] != None:
-                #print("! ! !")
-                #print(source)
-                #print(self.source_addresses[source])
-                #print("! ! !")
                 cntr = False
                 break
-        #print(cntr)
-        #print(len(self.source_addresses))
+        #print("lenght: ",len(self.source_addresses))
         if len(self.source_addresses) == 0 or cntr == False:
             self.remove()
             self.router_state.remove_group(self.group_ip)
@@ -121,7 +115,7 @@ class GroupState:
         if self.filter_mode == GroupState.INCLUDE:
             #concludes that traffic from this source is no longer desired
             self.source_addresses.pop(source)
-            self.notify_routing_remove(source.getAddress())
+            self.notify_routing_remove(source)
             print("Source {} was removed from sources list of group {}.".format(source, self.group_ip))
         elif self.filter_mode == GroupState.EXCLUDE:
             self.source_addresses[source] = None
@@ -136,8 +130,8 @@ class GroupState:
         for source in source_addresses:
             lst_ip.append(source.getAddress())
         src_ip = []
-        for source in self.source_addresses:
-            lst_ip.append(source)
+        for key in self.source_addresses.keys():
+            src_ip.append(str(key))
         # Turns off the timer associated with the source.
         # When it receives a query with sources, the router
         # should expect an answer from hosts in a certain time.
@@ -158,7 +152,8 @@ class GroupState:
                         self.notify_routing_add(s.getAddress())
                     self.clear_source_timer(s.getAddress())
                     if s.getAddress() in self.sources_in_risk_to_exclude:
-                        self.sources_in_risk_to_exclude.pop(s.getAddress())
+                        #print('source ADDRESS: type: ', s.getAddress(), type(s.getAddress()))
+                        self.sources_in_risk_to_exclude.remove(s.getAddress())
             elif self.filter_mode == GroupState.EXCLUDE:
                 for s in source_addresses:
                     if s.getAddress() in self.source_addresses:
@@ -273,21 +268,29 @@ class GroupState:
         elif int(operation_type) == 6:
             print("# BLOCK_OLD_SOURCES")
             lst3 = [value for value in src_ip if value in lst_ip]
+            #print('List: type:' ,lst3, type(lst3))
             load = list(set(lst_ip) - set(lst3))
             if self.router_state.interface_state == "Querier":
                 #send a group and source specific query Q(G, A*B)
                 data = PacketIGMPv3HeaderQuery(0, 0, 2, 125, self.group_ip)
-                for s in list(set(lst3)):  # common sources
+                for s in lst3:  # common sources
                     source = PacketIGMPMSourceAddress(s)
                     data.addSourceAddress(source)
-                    self.sources_in_risk_to_exclude.append(s)
+                    if s not in self.sources_in_risk_to_exclude:
+                        #print('source type:', type(s))
+                        self.sources_in_risk_to_exclude.append(s)
                 packet = PacketIGMPHeader(data)
                 self.router_state.interface.send(packet.bytes(), self.group_ip)
                 print("[INFO]: A Query was sent.")
-            for source in lst_ip:
-                if source in self.source_addresses:
-                    self.source_addresses.pop(source)
-                    self.notify_routing_remove(source)
+            for s in list(set(lst3)):  # common sources
+                if s not in self.sources_in_risk_to_exclude:
+                    self.sources_in_risk_to_exclude.append(s)
+            # for source in lst_ip:
+            #     if source in self.source_addresses:
+            #         pass
+            #         #self.source_addresses.pop(source)
+            #         #self.notify_routing_remove(source)
+            #print('risk: ', self.sources_in_risk_to_exclude)
             self.set_group_timer()
 
     #          #         #      */

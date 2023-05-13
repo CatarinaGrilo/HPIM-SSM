@@ -5,21 +5,51 @@ from .PacketProtocolHelloOptions import PacketNewProtocolHelloOptions, PacketPro
 ###########################################################################################################
 # JSON FORMAT
 ###########################################################################################################
-class PacketProtocolHelloSyncEntry():
-    def __init__(self, source, group, metric_preference, metric):
-        self.source = source
-        self.group = group
+class PacketProtocolHelloSyncMetric():
+    def __init__(self, metric_preference, metric):
         self.metric = metric
         self.metric_preference = metric_preference
 
     def bytes(self):
         """
+        Obtain metric of Protocol Sync in a format to be transmitted (JSON)
+        """
+        msg = {"METRIC": self.metric,
+               "METRIC_PREFERENCE": self.metric_preference,
+              }
+
+        return msg
+
+    @staticmethod
+    def parse_bytes(data: bytes):
+        """
+        Parse received metric of Protocol Sync Packet from JSON format
+        and convert it into ProtocolSyncMetric object and PacketProtocolSyncMetric
+        """
+        metric = data["METRIC"]
+        metric_preference = data["METRIC_PREFERENCE"]
+        return PacketProtocolHelloSyncEntry(metric_preference, metric)
+
+
+class PacketProtocolHelloSyncEntry():
+    def __init__(self, metric_flag,source, group, assert_metric = []):
+        self.metric_flag = metric_flag
+        self.source = source
+        self.group = group
+        self.assert_metric = assert_metric
+
+    def bytes(self):
+        """
         Obtain entry of Protocol Sync in a format to be transmitted (JSON)
         """
-        msg = {"SOURCE": self.source,
+        metric = []
+        for m in self.assert_metric:
+            metric.append(m.bytes())
+
+        msg = {"METRIC_FLAG": self.metric_flag,
+               "SOURCE": self.source,
                "GROUP": self.group,
-               "METRIC": self.metric,
-               "METRIC_PREFERENCE": self.metric_preference,
+               "ASSERT_METRIC": metric
               }
 
         return msg
@@ -30,11 +60,14 @@ class PacketProtocolHelloSyncEntry():
         Parse received entry of Protocol Sync Packet from JSON format
         and convert it into ProtocolSyncEntry object and PacketProtocolSyncEntries
         """
+        metric = []
+        for m in data["ASSERT_METRIC"]:
+            metric.append(PacketProtocolHelloSyncMetric.parse_bytes(m))
+
+        metric_flag = data["METRIC_FLAG"]
         source = data["SOURCE"]
         group = data["GROUP"]
-        metric = data["METRIC"]
-        metric_preference = data["METRIC_PREFERENCE"]
-        return PacketProtocolHelloSyncEntry(source, group, metric_preference, metric)
+        return PacketProtocolHelloSyncEntry(metric_flag, source, group, metric)
 
 
 class PacketProtocolHelloSync():
@@ -111,42 +144,28 @@ class PacketProtocolHelloSync():
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                        Tree Source IP                         |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                         Tree Group IP                         |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                       Metric Preference                       |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                            Metric                             |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 '''
-class PacketNewProtocolSyncEntry():
-    PIM_HDR_SYNC_ENTRY = "! 4s 4s L L"
-    PIM_HDR_SYNC_ENTRY_LEN = struct.calcsize(PIM_HDR_SYNC_ENTRY)
+class PacketNewProtocolSyncMetric():
+    PIM_HDR_SYNC_METRIC = "! L L"
+    PIM_HDR_SYNC_METRIC_LEN = struct.calcsize(PIM_HDR_SYNC_METRIC)
 
 
-    def __init__(self, source, group, metric_preference, metric):
-        if type(source) not in (str, bytes) or type(group) not in (str, bytes):
-            raise Exception
-        if type(source) is bytes:
-            source = socket.inet_ntoa(source)
-        if type(group) is bytes:
-            group = socket.inet_ntoa(group)
-
-        self.source = source
-        self.group = group
+    def __init__(self, metric_preference, metric):
         self.metric = metric
         self.metric_preference = metric_preference
 
     def __len__(self):
-        return PacketNewProtocolSyncEntry.PIM_HDR_SYNC_ENTRY_LEN
+        return PacketNewProtocolSyncMetric.PIM_HDR_SYNC_METRIC_LEN
 
     def bytes(self):
         """
         Obtain entry of Protocol Sync in a format to be transmitted (binary)
         """
-        msg = struct.pack(PacketNewProtocolSyncEntry.PIM_HDR_SYNC_ENTRY, socket.inet_aton(self.source),
-                          socket.inet_aton(self.group), self.metric_preference, self.metric)
+        msg = struct.pack(PacketNewProtocolSyncMetric.PIM_HDR_SYNC_METRIC, self.metric_preference, self.metric)
         return msg
 
     @staticmethod
@@ -155,10 +174,76 @@ class PacketNewProtocolSyncEntry():
         Parse received entry of Protocol Sync Packet from binary format
         and convert it into ProtocolSyncEntry object and PacketProtocolSyncEntries
         """
-        (source, group, metric_preference, metric) = struct.unpack(
+        (metric_preference, metric) = struct.unpack(
+            PacketNewProtocolSyncMetric.PIM_HDR_SYNC_METRIC,
+            data[:PacketNewProtocolSyncMetric.PIM_HDR_SYNC_METRIC_LEN])
+        return PacketNewProtocolSyncMetric(metric_preference, metric)
+
+
+'''
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           metric_flag                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                         Tree Source IP                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                         Tree Group IP                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                         Assert Metric                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+'''
+class PacketNewProtocolSyncEntry():
+    PIM_HDR_SYNC_ENTRY = "! h 4s 4s"
+    PIM_HDR_SYNC_ENTRY_LEN = struct.calcsize(PIM_HDR_SYNC_ENTRY)
+
+
+    def __init__(self, metric_flag, source, group, assert_metric):
+        if type(source) not in (str, bytes) or type(group) not in (str, bytes):
+            raise Exception
+        if type(source) is bytes:
+            source = socket.inet_ntoa(source)
+        if type(group) is bytes:
+            group = socket.inet_ntoa(group)
+
+        self.metric_flag = metric_flag
+        self.source = source
+        self.group = group
+        self.assert_metric = assert_metric
+
+    def add_metric(self, m):
+        self.assert_metric.append(m)
+
+    def bytes(self) -> bytes:
+        """
+        Obtain entry of Protocol Sync in a format to be transmitted (binary)
+        """
+        msg = struct.pack(PacketNewProtocolSyncEntry.PIM_HDR_SYNC_ENTRY, self.metric_flag, socket.inet_aton(self.source),
+                          socket.inet_aton(self.group))
+        if self.metric_flag:
+            msg += self.assert_metric[0].bytes()
+        return msg
+
+    def __len__(self):
+        return len(self.bytes())
+    
+    @staticmethod
+    def parse_bytes(data: bytes):
+        """
+        Parse received entry of Protocol Sync Packet from binary format
+        and convert it into ProtocolSyncEntry object and PacketProtocolSyncEntries
+        """
+        (metric_flag, source, group) = struct.unpack(
             PacketNewProtocolSyncEntry.PIM_HDR_SYNC_ENTRY,
             data[:PacketNewProtocolSyncEntry.PIM_HDR_SYNC_ENTRY_LEN])
-        return PacketNewProtocolSyncEntry(source, group, metric_preference, metric)
+        
+        data = data[PacketNewProtocolSyncEntry.PIM_HDR_SYNC_ENTRY_LEN:]
+        entry_msg = PacketNewProtocolSyncEntry(metric_flag, source, group, [])
+
+        if metric_flag:
+            metric_msg = PacketNewProtocolSyncMetric.parse_bytes(data)
+            entry_msg.add_metric(metric_msg)
+        return entry_msg
 
 
 '''

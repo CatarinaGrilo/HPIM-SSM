@@ -82,7 +82,7 @@ class InterfaceIGMP(Interface):
         """
         super().send(data, address)
 
-    def _receive(self, raw_bytes):
+    def _receive(self, raw_bytes, ancdata, src_addr):
         """
         Interface received a new control packet
         """

@@ -6,6 +6,8 @@ from utils import if_indextoname
 from pyroute2 import IPDB
 
 
+routing = {} # KEY : des_ip, VALUE : (metric_administrative_distance, metric_cost, is_directly_connected, rpf_if, rpf_node)
+
 def get_unicast_info(ip_dst):
     return UnicastRouting.get_unicast_info(ip_dst)
 
@@ -57,6 +59,9 @@ class UnicastRouting(object):
         """
         Obtain unicast info regarding IP ip_dst, such as RPC, if it is directly connected and root interface index
         """
+        if routing.get(ip_dst, None) is not None:
+            #print("Source is on dic\n\n")
+            return routing.get(ip_dst, None)
         #print("In get unicast info")
         metric_administrative_distance = 0xFFFFFFFF
         metric_cost = 0xFFFFFFFF
@@ -96,6 +101,7 @@ class UnicastRouting(object):
         #print("is_directly_connected: "+ str(is_directly_connected))
         #print("rpf_if: " + str(rpf_if))
         #print("Next Hop = Potential AW = " + str(rpf_node))
+        routing[ip_dst] = (metric_administrative_distance, metric_cost, is_directly_connected, rpf_if, rpf_node)
         return (metric_administrative_distance, metric_cost, is_directly_connected, rpf_if, rpf_node)
 
     @staticmethod
@@ -132,6 +138,7 @@ class UnicastRouting(object):
             #print(network_address + "/" + str(mask_len))
             subnet = ipaddress.ip_network(network_address + "/" + str(mask_len))
             #print(str(subnet))
+            routing.clear()
             UnicastRouting.lock.release()
             import Main
             print("Unicast changes")

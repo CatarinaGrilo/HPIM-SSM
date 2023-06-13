@@ -13,7 +13,7 @@ from .metric import AssertMetric, Metric
 
 
 class TreeInterfaceUpstream(TreeInterface):
-    LOGGER = logging.getLogger('protocol.KernelEntry.RootInterface')
+    LOGGER = logging.getLogger('hpim.KernelEntry.RootInterface')
 
     def __init__(self, kernel_entry, interface_id, interest_state, best_neighbor_metric, was_non_root, was_in_tree):
         extra_dict_logger = kernel_entry.kernel_entry_logger.extra.copy()
@@ -41,7 +41,7 @@ class TreeInterfaceUpstream(TreeInterface):
         receive_thread.daemon = True
         receive_thread.start()
 
-        self.logger.debug('Created RootInterface')
+        #self.logger.debug('Created RootInterface')
 
         # Ustream Node Interest State
         if interest_state:
@@ -52,7 +52,7 @@ class TreeInterfaceUpstream(TreeInterface):
             self._upstream_node_interest_state = SFMRPruneState.NUI
 
 
-        self.upstream_logger.debug('Upstream interest state transitions to ' + str(self._upstream_node_interest_state))
+        #self.upstream_logger.debug('Upstream interest state transitions to ' + str(self._upstream_node_interest_state))
 
 
     def socket_recv(self):
@@ -78,7 +78,7 @@ class TreeInterfaceUpstream(TreeInterface):
         with self.get_state_lock():
             if new_state != self._upstream_node_interest_state:
                 self._upstream_node_interest_state = new_state
-                self.upstream_logger.debug('Upstream interest state transitions to ' + str(new_state))
+                #self.upstream_logger.debug('Upstream interest state transitions to ' + str(new_state))
 
                 self.change_tree()
                 self.evaluate_in_tree()
@@ -154,7 +154,7 @@ class TreeInterfaceUpstream(TreeInterface):
         React to this event in order to transmit some control packets
         """
         # event 7
-        self.logger.debug("Router state transitions to Not Interested")
+        #self.logger.debug("Router state transitions to Not Interested")
         SFMRNewRootState.interfaces_roles_dont_change_and_router_transition_to_it_or_ot(self)
 
     def node_is_in_tree(self):
@@ -163,7 +163,7 @@ class TreeInterfaceUpstream(TreeInterface):
         React to this event in order to transmit some control packets
         """
         # event 7
-        self.logger.debug("Router state transitions to Interested")
+        #self.logger.debug("Router state transitions to Interested")
         SFMRNewRootState.interfaces_roles_dont_change_and_router_transition_to_it_or_ot(self)
 
     ####################################################################
@@ -178,14 +178,14 @@ class TreeInterfaceUpstream(TreeInterface):
         Verify if this interface is connected to interested hosts/nodes
         (based on Interest state of all neighbors and IGMP)
         """
-        print("def is_in_tree() in Tree upstream")
+        #print("def is_in_tree() in Tree upstream")
         return self.igmp_has_members() or self.are_upstream_nodes_interested()
     
     def are_upstream_nodes_interested(self):
         """
         Determine if there is interest from non-Upstream neighbors based on their interest state
         """
-        print("Are upstream nodes interested: "+ str(self._upstream_node_interest_state.are_upstream_nodes_interested()))
+        #print("Are upstream nodes interested: "+ str(self._upstream_node_interest_state.are_upstream_nodes_interested()))
         return self._upstream_node_interest_state.are_upstream_nodes_interested()
 
 
@@ -223,8 +223,6 @@ class TreeInterfaceUpstream(TreeInterface):
          otherwise this tree is not included in the snapshot
         """
         if not self.is_interface_connected_to_source():
-            print("neighbor ip: "+ str(neighbor_ip)+ " potential_AW ip: " + str(self._kernel_entry.potential_aw)+"\n\n\n\n")
-            print("node is in tree: " + str(self.is_node_in_tree()))
             if self.is_node_in_tree() and neighbor_ip == self._kernel_entry.potential_aw:
                 return (None)
             else:

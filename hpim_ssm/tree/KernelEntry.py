@@ -11,15 +11,15 @@ from .tree_interface import TreeInterface
 
 
 class KernelEntry:
-    KERNEL_LOGGER = logging.getLogger('protocol.KernelEntry')
+    KERNEL_LOGGER = logging.getLogger('hpim.KernelEntry')
 
     def __init__(self, source_ip: str, group_ip: str, interest_state_dic, assert_state_dic):
         self.kernel_entry_logger = logging.LoggerAdapter(self.KERNEL_LOGGER, {'tree': '(' + source_ip + ',' + group_ip + ')'})
-        self.kernel_entry_logger.debug('Create KernelEntry')
+        #self.kernel_entry_logger.debug('Create KernelEntry')
         
         self.source_ip = source_ip
         self.group_ip = group_ip
-        print("Create kernel entry: (" + source_ip + ", " + group_ip + ")\n")
+        #print("Create kernel entry: (" + source_ip + ", " + group_ip + ")\n")
         self._interest_interface_state = interest_state_dic
         self._assert_interface_state = assert_state_dic
 
@@ -29,13 +29,13 @@ class KernelEntry:
             UnicastRouting.get_unicast_info(source_ip)
         # TODO verificar is directly connected
         self._rpc = Metric(metric_administrative_distance, metric_cost)
-        print("RPC - preference: "+ str(self._rpc.metric_preference) + "; metric:" +str(self._rpc.route_metric) +"; ip: " + str(self._rpc.ip_address))
+        #print("RPC - preference: "+ str(self._rpc.metric_preference) + "; metric:" +str(self._rpc.route_metric) +"; ip: " + str(self._rpc.ip_address))
         if is_directly_connected:
             self.originator = True
         else:
             self.originator = False
         self.potential_aw = potential_aw
-        print("Potential AW = " + str(self.potential_aw)+"\n")
+        #print("Potential AW = " + str(self.potential_aw)+"\n")
         #######################################################################################
         # Locks
         self._multicast_change = Lock()
@@ -148,7 +148,7 @@ class KernelEntry:
         """
         if index not in self.interface_state:
             return
-        print("Check interface state " + str(index))
+        #print("Check interface state " + str(index))
         self.check_interest_state(index, interest_state)
         self.check_assert_state(index, assert_state)
         self.check_tree_state()
@@ -163,15 +163,16 @@ class KernelEntry:
 
         current_interest_state = self._interest_interface_state.get(index, None)
         self._interest_interface_state[index] = interest_state
-        print("Check interest - interface "+ str(index) + "\nCurrent: "+str(current_interest_state) + " interest: "+str(interest_state))
+        #print("Check interest - interface "+ str(index) + "\nCurrent: "+str(current_interest_state) + " interest: "+str(interest_state))
         if current_interest_state != interest_state:
             self.interface_state[index].change_interest_state(interest_state)
         else:
-            self.kernel_entry_logger.debug("No changes in the interest state")
+            #self.kernel_entry_logger.debug("No changes in the interest state")
+            pass
 
     def check_assert_state(self, index, assert_state):
         
-        print("Check assert inteface " +str(index))
+        #print("Check assert inteface " +str(index))
         if index not in self.interface_state:
             return
 
@@ -183,9 +184,9 @@ class KernelEntry:
 
     def check_tree_state(self):
         with self.CHANGE_STATE_LOCK:
-            print("Check Tree State: ")
+            #print("Check Tree State: ")
             for interface in self.interface_state.values():
-                print('Interface '+str(interface._interface_id))
+                #print('Interface '+str(interface._interface_id))
                 if interface.is_downstream():
                     if interface.is_in_tree():
                         return
@@ -222,7 +223,7 @@ class KernelEntry:
         """
         Router suffered an RPC change... React to this change
         """
-        print("In network update")
+        #print("In network update")
         with self.CHANGE_STATE_LOCK:
             (metric_administrative_distance, metric_cost, is_directly_connected, new_inbound_interface_index, new_potential_aw) = \
                 UnicastRouting.get_unicast_info(self.source_ip)
@@ -242,7 +243,7 @@ class KernelEntry:
 
                 root_interest_state = self._interest_interface_state.get(new_inbound_interface_index, False)
                 root_assert_state = self._assert_interface_state.get(new_inbound_interface_index, None)
-                print("Interface role changes")
+                #print("Interface role changes")
                 if self.potential_aw != new_potential_aw:
                     self.interface_state[self.inbound_interface_index].notify_potential_aw_change_root_changed(new_potential_aw, new_root=False)
                     self.potential_aw = new_potential_aw
@@ -314,7 +315,7 @@ class KernelEntry:
         #if self.originator:
          #   return
 
-        print("Evaluate tree change\n")
+        #print("Evaluate tree change\n")
         with self._lock_test2:
             is_in_tree = self.is_in_tree()
             was_in_tree = self._was_in_tree
@@ -355,7 +356,7 @@ class KernelEntry:
         """
         Reset multicast routing table due to changes in state
         """
-        self.kernel_entry_logger.debug("Updating multicast routing table")
+        #self.kernel_entry_logger.debug("Updating multicast routing table")
         with self._multicast_change:
             if self.inbound_interface_index is not None:
                 Main.kernel.set_multicast_route(self)
@@ -364,7 +365,7 @@ class KernelEntry:
         """
         Remove entry from the multicast routing table
         """
-        self.kernel_entry_logger.debug("Removing entry from multicast routing table")
+        #self.kernel_entry_logger.debug("Removing entry from multicast routing table")
         Main.kernel.remove_multicast_route(self)
 
     def delete_state(self):
@@ -450,9 +451,6 @@ class KernelEntry:
         with self.CHANGE_STATE_LOCK:
             if index not in self.interface_state:
                 return
-
-
-
             #check if removed interface is root interface
             if self.inbound_interface_index == index:
                 self.inbound_interface_index = None

@@ -2,7 +2,7 @@ import ipaddress
 import socket
 import struct
 import traceback
-from threading import Thread
+from threading import Thread, RLock
 import threading
 
 import Main
@@ -71,7 +71,7 @@ class Kernel:
         s.setsockopt(socket.IPPROTO_IP, Kernel.MRT_ASSERT, 0)
 
         self.socket = s
-        self.rwlock = RWLockWrite()
+        self.rwlock = RLock()
 
 
         #self.create_virtual_interface("0.0.0.0", "pimreg", index=0, flags=Kernel.VIFF_REGISTER)
@@ -84,7 +84,7 @@ class Kernel:
         self.interface_logger = Main.logger.getChild('KernelInterface')
         self.tree_logger = Main.logger.getChild('KernelTree')
 
-        self.interface_logger.debug("created KERNEL")
+        #self.interface_logger.debug("created KERNEL")
         self.lock = threading.Lock()
 
 
@@ -114,7 +114,7 @@ class Kernel:
     def create_protocol_interface(self, interface_name: str):
         #print("IN KERNEL: CREATE PROTOCOL INTERFACE")
         thread = None
-        with self.rwlock.genWlock():
+        with self.rwlock:
             protocol_interface = self.protocol_interface.get(interface_name)
             igmp_interface = self.igmp_interface.get(interface_name)
             vif_already_exists = protocol_interface or igmp_interface
@@ -128,7 +128,6 @@ class Kernel:
 
             if interface_name not in self.protocol_interface:
                 pim_interface = InterfaceProtocol(interface_name, index)     #CREATE INSTANCE OF INTERFACE PRTOOCOL
-                print("CREATE INSTANCE OF INTERFACE PROTOCOL")
                 self.protocol_interface[interface_name] = pim_interface
                 ip_interface = pim_interface.ip_interface
                 if not vif_already_exists:
@@ -142,7 +141,7 @@ class Kernel:
 
     def create_igmp_interface(self, interface_name: str):
         thread = None
-        with self.rwlock.genWlock():
+        with self.rwlock:
             protocol_interface = self.protocol_interface.get(interface_name)
             igmp_interface = self.igmp_interface.get(interface_name)
             vif_already_exists = protocol_interface or igmp_interface
@@ -169,7 +168,7 @@ class Kernel:
 
     def remove_interface(self, interface_name, igmp: bool = False, pim: bool = False):
         thread = None
-        with self.rwlock.genWlock():
+        with self.rwlock:
             ip_interface = None
             pim_interface = self.protocol_interface.get(interface_name)
             igmp_interface = self.igmp_interface.get(interface_name)
@@ -214,7 +213,7 @@ class Kernel:
         self.interface_logger.debug('Remove virtual interface: %s -> %d', interface_name, index)
 
     def notify_interface_changes(self, interface_name):
-        with self.rwlock.genWlock():
+        with self.rwlock:
             if interface_name is None or interface_name not in self.vif_name_to_index_dic:
                 return
             igmp_was_enabled = interface_name in self.igmp_interface
@@ -227,7 +226,7 @@ class Kernel:
             self.create_protocol_interface(interface_name)
 
     def add_interface_security(self, interface_name, security_id, security_algorithm, security_key):
-        with self.rwlock.genRlock():
+        with self.rwlock:
             if interface_name not in self.protocol_interface:
                 return
 
@@ -235,7 +234,7 @@ class Kernel:
             interface.add_security_key(security_id, security_algorithm, security_key)
 
     def remove_interface_security(self, interface_name, security_id):
-        with self.rwlock.genRlock():
+        with self.rwlock:
             if interface_name not in self.protocol_interface:
                 return
 
@@ -280,9 +279,8 @@ class Kernel:
         self.socket.setsockopt(socket.IPPROTO_IP, Kernel.MRT_ADD_MFC, struct_mfcctl)
 
     def remove_multicast_route(self, kernel_entry: KernelEntry):
-        self.interface_logger.debug("Removing multicast route")
+        #self.interface_logger.debug("Removing multicast route")
         Thread(target=self._remove_multicast_route, args=(kernel_entry,)).start()
-        #self._remove_multicast_route(kernel_entry, struct_mfcctl)
 
     def _remove_multicast_route(self, kernel_entry):
         source_ip = socket.inet_aton(kernel_entry.source_ip)
@@ -290,31 +288,36 @@ class Kernel:
         outbound_interfaces_and_other_parameters = [0] + [0]*Kernel.MAXVIFS + [0]*4
 
         struct_mfcctl = struct.pack("4s 4s H " + "B"*Kernel.MAXVIFS + " IIIi", source_ip, group_ip, *outbound_interfaces_and_other_parameters)
-        with self.rwlock.genWlock():
-            source_ip = kernel_entry.source_ip
-            group_ip = kernel_entry.group_ip
+        source_ip = kernel_entry.source_ip
+        group_ip = kernel_entry.group_ip
 
-            if not (source_ip in self.routing and group_ip in self.routing[source_ip]):
-                return
-            try:
-                self.socket.setsockopt(socket.IPPROTO_IP, Kernel.MRT_DEL_MFC, struct_mfcctl)
-            except socket.error:
-                pass
-            self.routing[kernel_entry.source_ip].pop(kernel_entry.group_ip)
-            kernel_entry.delete_state()
-            if len(self.routing[source_ip]) == 0:
-                self.routing.pop(source_ip)
-
-            info_about_tree_can_be_removed = True
-            for interface in self.protocol_interface.values():
-                if not info_about_tree_can_be_removed:
+        if not (source_ip in self.routing and group_ip in self.routing[source_ip]):
+            return
+        
+        info_about_tree_can_be_removed = True
+        for interface in self.protocol_interface.values():
+            if not info_about_tree_can_be_removed:
+                break
+            for n in list(interface.neighbors.values()):
+                (neighbor_interest_state, neighbor_assert_state) = n.get_tree_state(tree=(source_ip, group_ip))
+                if neighbor_interest_state or neighbor_assert_state is not None:
+                    self.create_entry(kernel_entry.source_ip, kernel_entry.group_ip)
+                    info_about_tree_can_be_removed = False
                     break
-                for n in list(interface.neighbors.values()):
-                    (_, neighbor_upstream_state) = n.get_tree_state(tree=(source_ip, group_ip))
-                    if neighbor_upstream_state is not None:
-                        self.create_entry(kernel_entry.source_ip, kernel_entry.group_ip)
-                        info_about_tree_can_be_removed = False
-                        break
+                
+        with self.rwlock:
+            if info_about_tree_can_be_removed:
+                self.interface_logger.debug("Removing multicast route")
+                try:
+                    self.socket.setsockopt(socket.IPPROTO_IP, Kernel.MRT_DEL_MFC, struct_mfcctl)
+                except socket.error:
+                    pass
+                if self.routing.get(kernel_entry.source_ip, None) is not None:
+                    if self.routing[kernel_entry.source_ip].get(kernel_entry.group_ip, None):
+                        self.routing[kernel_entry.source_ip].pop(kernel_entry.group_ip)
+                        kernel_entry.delete_state()
+                        if len(self.routing[source_ip]) == 0:
+                            self.routing.pop(source_ip)
 
             # if info_about_tree_can_be_removed:
             #     for interface in self.protocol_interface.values():
@@ -366,7 +369,7 @@ class Kernel:
     def igmpmsg_nocache_handler(self, ip_src, ip_dst, iif):
         # (_, _, is_directly_connected, rpf_if,_) = UnicastRouting.get_unicast_info(ip_src)
 
-        # with self.rwlock.genWlock():
+        # with self.rwlock:
         #     if ip_src in self.routing and ip_dst in self.routing[ip_src]:
         #         self.routing[ip_src][ip_dst].recv_data_msg(iif)
         #     elif is_directly_connected:
@@ -381,8 +384,6 @@ class Kernel:
         #         self.set_flood_multicast_route(ip_src, ip_dst, rpf_if)
         return
 
-
-
     # receive multicast (S,G) packet in a outbound_interface
     def igmpmsg_wrongvif_handler(self, ip_src, ip_dst, iif):
         #source_group_pair = (ip_src, ip_dst)
@@ -391,7 +392,7 @@ class Kernel:
 
     # notify KernelEntries about changes at the unicast routing table
     def notify_unicast_changes(self, subnet):
-        with self.rwlock.genWlock():
+        with self.rwlock:
             for source_ip in list(self.routing.keys()):
                 source_ip_obj = ipaddress.ip_address(source_ip)
                 if source_ip_obj not in subnet:
@@ -404,8 +405,8 @@ class Kernel:
 
         ip_src = source_group[0]
         ip_dst = source_group[1]
-        print("In recv_interest_msg interface: " + str(interface.ip_interface))
-        with self.rwlock.genRlock():
+        #print("In recv_interest_msg interface: " + str(interface.ip_interface))
+        with self.rwlock:
             if interface not in self.protocol_interface.values():
                 return
 
@@ -428,8 +429,8 @@ class Kernel:
         #self.interface_logger.debug("ENTROU RCV ASSERT")
         ip_src = source_group[0]
         ip_dst = source_group[1]
-        print("In recv_assert_msg interface: " + str(interface.ip_interface))
-        with self.rwlock.genWlock():
+        #print("In recv_assert_msg interface: " + str(interface.ip_interface))
+        with self.rwlock:
             if interface not in self.protocol_interface.values():
                 return
 
@@ -451,7 +452,7 @@ class Kernel:
     def create_entry(self, ip_src, ip_dst):
         (_, _, is_directly_connected, _, _) = UnicastRouting.get_unicast_info(ip_src)
 
-        print("Is directly connected to the source: ", is_directly_connected)
+        #print("Is directly connected to the source: ", is_directly_connected)
 
         interest_state_dict = {}
         assert_state_dict = {}
@@ -489,7 +490,7 @@ class Kernel:
 
 
     def recheck_all_trees(self, vif_index: int):
-        with self.rwlock.genWlock():
+        with self.rwlock:
             interface_name = self.vif_index_to_name_dic.get(vif_index, None)
             interface = self.protocol_interface.get(interface_name, None)
 
@@ -516,7 +517,7 @@ class Kernel:
 
     def recheck_igmp_all_trees(self, vif_index: int):
         #print("ENTROU RECHECK IGMP")
-        with self.rwlock.genWlock():
+        with self.rwlock:
             for src_dict in self.routing.values():
                 for entry in src_dict.values():
                     entry.check_igmp_state(vif_index)

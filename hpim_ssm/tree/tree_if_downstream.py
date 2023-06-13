@@ -11,7 +11,7 @@ from .assert_state import AssertState, SFMRAssertABC
 
 
 class TreeInterfaceDownstream(TreeInterface):
-    LOGGER = logging.getLogger('protocol.KernelEntry.NonRootInterface')
+    LOGGER = logging.getLogger('hpim.KernelEntry.NonRootInterface')
 
     def __init__(self, kernel_entry, interface_id, rpc: Metric, interest_state, best_neighbor_metric, was_root, was_in_tree):
         extra_dict_logger = kernel_entry.kernel_entry_logger.extra.copy()
@@ -29,13 +29,13 @@ class TreeInterfaceDownstream(TreeInterface):
         else:
             self._downstream_node_interest_state = SFMRPruneState.NDI
 
-        self.downstream_logger.debug('Downstream interest state transitions to ' + str(self._downstream_node_interest_state))
+        #self.downstream_logger.debug('Downstream interest state transitions to ' + str(self._downstream_node_interest_state))
 
         # Assert State
         
         self._assert_state = AssertState.NotAvailable
 
-        self.assert_logger.debug('Assert state transitions to ' + str(self._assert_state))
+        #self.assert_logger.debug('Assert state transitions to ' + str(self._assert_state))
         self._my_assert_rpc = AssertMetric(rpc.metric_preference, rpc.route_metric, self.get_ip())
         self.verify_assert(creating_interface=True)
 
@@ -45,11 +45,11 @@ class TreeInterfaceDownstream(TreeInterface):
         # Event 1
         #if was_root and interest_state:
         if was_root and was_in_tree:
-            self.downstream_logger.debug("event 1")
+            #self.downstream_logger.debug("event 1")
             SFMRNonRootState.interface_roles_change(self)
 
 
-        self.logger.debug('Created NonRootInterface')
+        #self.logger.debug('Created NonRootInterface')
 
 
     ############################################
@@ -63,7 +63,7 @@ class TreeInterfaceDownstream(TreeInterface):
         with self.get_state_lock():
             if new_state != self._assert_state:
                 self._assert_state = new_state
-                self.assert_logger.debug('Interface ' + str(self._interface_id) + 'Assert state transitions to ' + str(new_state))
+                #self.assert_logger.debug('Interface ' + str(self._interface_id) + 'Assert state transitions to ' + str(new_state))
 
                 if not creating_interface:
                     self.change_tree()
@@ -79,7 +79,7 @@ class TreeInterfaceDownstream(TreeInterface):
         with self.get_state_lock():
             if new_state != self._downstream_node_interest_state:
                 self._downstream_node_interest_state = new_state
-                self.downstream_logger.debug('Interface ' + str(self._interface_id) + 'Downstream interest state transitions to ' + str(new_state))
+                #self.downstream_logger.debug('Interface ' + str(self._interface_id) + ' Downstream interest state transitions to ' + str(new_state))
 
                 self.verify_assert(creating_interface=False)
                 self.change_tree()
@@ -94,7 +94,7 @@ class TreeInterfaceDownstream(TreeInterface):
         A neighbor has changed Interest state due to the reception of any control packet
         (Join or Prune or Sync)
         """
-        print("In change_interest_state interface " + str(self._interface_id))
+        #print("In change_interest_state interface " + str(self._interface_id))
         if interest_state:
             self.set_downstream_node_interest_state(SFMRPruneState.DI)
 
@@ -128,14 +128,14 @@ class TreeInterfaceDownstream(TreeInterface):
         (based on Interest state of all neighbors and IGMP)
         """
         #print("def is_in_tree() in Tree Downstream")
-        print("In is in tree interface " + str(self._interface_id))
+        #print("In is in tree interface " + str(self._interface_id))
         return self.igmp_has_members() or self.are_downstream_nodes_interested()
 
     def are_downstream_nodes_interested(self):
         """
         Determine if there is interest from non-Upstream neighbors based on their interest state
         """
-        print("Are downstream nodes interested: " + str(self._downstream_node_interest_state.are_downstream_nodes_interested()))
+        #print("Are downstream nodes interested: " + str(self._downstream_node_interest_state.are_downstream_nodes_interested()))
         return self._downstream_node_interest_state.are_downstream_nodes_interested()
 
     def delete(self):

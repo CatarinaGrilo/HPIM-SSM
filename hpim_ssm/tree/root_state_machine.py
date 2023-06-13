@@ -14,7 +14,7 @@ class SFMRNewRootState:
         """
         Interfaces roles change (NonRoot->Root)
         """
-        interface.logger.debug('interfaces_roles_change')
+        #interface.logger.debug('interfaces_roles_change')
         if interface.is_node_in_tree():
             interface.send_prune(interface._kernel_entry.potential_aw)
 
@@ -24,5 +24,5 @@ class SFMRNewRootState:
         Interfaces roles dont change (this interface remains Root) AND
         router changes its interest in receiving data packets (becomes interested or not interested)
         """
-        interface.logger.debug('interfaces_roles_dont_change_and_router_transition_to_it_or_ot')
+        #interface.logger.debug('interfaces_roles_dont_change_and_router_transition_to_it_or_ot')
         interface.send_my_interest()

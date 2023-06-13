@@ -32,9 +32,6 @@ class TreeInterface(metaclass=ABCMeta):
         except:
             self._local_membership_state = LocalMembership.NoInfo
 
-
-
-
     ###########################################
     # Recv packets
     ###########################################

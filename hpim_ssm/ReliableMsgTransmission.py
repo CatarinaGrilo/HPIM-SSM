@@ -29,7 +29,7 @@ class ReliableMessageTransmission(object):
         """
         Send reliably a new Assert message
         """
-        self._interface.interface_logger.debug('Sending Assert message')
+        #self._interface.interface_logger.debug('Sending Assert message')
 
         with self._lock:
             self.cancel_all_messages()
@@ -61,6 +61,9 @@ class ReliableMessageTransmission(object):
             self.set_retransmission_timer()
             self._interface.send(packet, dst)
 
+            if self._msg_multicast is not None:
+                self._neighbors_that_acked.add(dst)
+
     def send_prune(self, source, group, dst):
         """
         Send reliably a new NoInterest message
@@ -77,39 +80,8 @@ class ReliableMessageTransmission(object):
             self.set_retransmission_timer()
             self._interface.send(packet, dst)
 
-    # def send_join(self, source, group):
-    #     """
-    #     Send reliably a new Join message
-    #     """
-    #     self._interface.interface_logger.debug('Sending Join message')
-
-    #     with self._lock:
-    #         self.cancel_all_messages()
-
-    #         (bt, sn) = self._interface.get_sequence_number()
-
-    #         ph = PacketProtocolJoin(source, group, sn)
-    #         self._msg_multicast = Packet(payload=PacketProtocolHeader(ph, boot_time=bt))
-
-    #         self.set_retransmission_timer()
-    #         self._interface.send(self._msg_multicast)
-
-    # def send_prune(self, source, group):
-    #     """
-    #     Send reliably a new Prune message
-    #     """
-    #     self._interface.interface_logger.debug("Sending Prune message")
-    #     with self._lock:
-    #         self.cancel_all_messages()
-
-    #         (bt, sn) = self._interface.get_sequence_number()
-
-    #         ph = PacketProtocolPrune(source, group, sn)
-    #         self._msg_multicast = Packet(payload=PacketProtocolHeader(ph, boot_time=bt))
-
-    #         self.set_retransmission_timer()
-
-    #         self._interface.send(self._msg_multicast)
+            if self._msg_multicast is not None:
+                self._neighbors_that_acked.add(dst)
 
     def receive_ack(self, neighbor_ip, bt, sn):
         """
@@ -118,11 +90,17 @@ class ReliableMessageTransmission(object):
         with self._lock:
             msg = self._msg_multicast
             if msg is not None and (bt > msg.payload.boot_time or
-                                    bt == msg.payload.boot_time and sn >= msg.payload.payload.sequence_number):
+                            bt == msg.payload.boot_time and sn >= msg.payload.payload.sequence_number):
                 self._neighbors_that_acked.add(neighbor_ip)
-                if self.did_all_neighbors_acked():
-                    self.cancel_messsage_multicast()
+            if self.did_all_neighbors_acked():
+                #print("OKAY assert!!")
+                self.cancel_messsage_multicast()
 
+            if neighbor_ip in self._msg_unicast:
+                msg = self._msg_unicast[neighbor_ip]
+                if bt > msg.payload.boot_time or (bt == msg.payload.boot_time and
+                                                sn >= msg.payload.payload.sequence_number):
+                    self.cancel_message_unicast(neighbor_ip)
 
     def did_all_neighbors_acked(self):
         """
@@ -133,18 +111,24 @@ class ReliableMessageTransmission(object):
 
     def cancel_messsage_multicast(self):
         """
-        Stop reliably monitoring a Assert message
+        Stop reliably monitoring an IamUpstream/IamNoLongerUpstream message
         """
         with self._lock:
             self._neighbors_that_acked.clear()
             self._msg_multicast = None
-
-            self.clear_retransmission_timer()
-            self._number_of_failed_acks.clear()
+            if len(self._msg_unicast) == 0:
+                # there are no multicast nor unicast messages being transmitted
+                self.clear_retransmission_timer()
+                self._number_of_failed_acks.clear()
+            else:
+                # only unicast messages are being transmitted
+                neighbors_that_have_acked = self._number_of_failed_acks.keys() - self._msg_unicast.keys()
+                for n in neighbors_that_have_acked:
+                    self._number_of_failed_acks.pop(n, None)
 
     def cancel_message_unicast(self, ip):
         """
-        Stop reliably monitoring an Join/Prune message
+        Stop reliably monitoring an Interest/NoInterest message
         """
         with self._lock:
             self._msg_unicast.pop(ip, None)
@@ -155,14 +139,14 @@ class ReliableMessageTransmission(object):
     def cancel_all_messages(self):
         """
         Stop reliably monitoring any message regarding this tree
-        (Join/Prune/Assert)
+        (IamUpstream/IamNoLongerUpstream/Interest/NoInterest)
         """
         with self._lock:
             self.clear_retransmission_timer()
             self._neighbors_that_acked.clear()
             self._number_of_failed_acks.clear()
             self._msg_multicast = None
-            # self._msg_unicast.clear()
+            self._msg_unicast.clear()
 
     ##########################################
     # Set timers
@@ -191,27 +175,36 @@ class ReliableMessageTransmission(object):
         Retransmission timer has expired
         """
         neighbors_not_acked = set()
-        with self._lock:
-            # recheck if all neighbors acked
-            if self._msg_multicast is not None and self.did_all_neighbors_acked():
-                self.cancel_messsage_multicast()
-            elif self._msg_multicast is not None:
-                # take note of all neighbors that have not acked the multicast msg
-                neighbors_not_acked = self.get_interface_neighbors() - self._neighbors_that_acked
+        with self._interface.neighbors_lock:
+            with self._lock:
+                # recheck if all neighbors acked
+                if self._msg_multicast is not None and self.did_all_neighbors_acked():
+                    self.cancel_messsage_multicast()
+                elif self._msg_multicast is not None:
+                    # take note of all neighbors that have not acked the multicast msg
+                    neighbors_not_acked = self.get_interface_neighbors() - self._neighbors_that_acked
+                    print("neighbour did not ack MULTICAST: " + str(neighbors_not_acked) + "\n\n")
 
-            # didnt received acks from every neighbor... so lets resend msg and reschedule timer
-            msg = self._msg_multicast
-            if msg is not None:
-                self._interface.interface_logger.debug("Retransmiting message")
-                self._interface.send(msg)
+                # didnt received acks from every neighbor... so lets resend msg and reschedule timer
+                msg = self._msg_multicast
+                if msg is not None:
+                    self._interface.send(msg)
 
-            if self._msg_multicast is not None:  # or len(self._msg_unicast) > 0:
-                self.set_retransmission_timer()
+                for (dst, msg) in self._msg_unicast.copy().items():
+                    if self._interface.is_neighbor(dst):
+                        self._interface.send(msg, dst)
+                        neighbors_not_acked.add(dst)  # take note of all neighbors that have not acked unicast messages
+                        print("neighbour did not ack unicast: " + str(neighbors_not_acked) + "\n\n")
+                    else:
+                        self.cancel_message_unicast(dst)
 
-            # update number of failed acks per neighbor and check which ones should be considered to have failed
-            for neighbor_ip in neighbors_not_acked:
-                self._number_of_failed_acks[neighbor_ip] = self._number_of_failed_acks.get(neighbor_ip, 0) + 1
-            self.check_neighbor_failures()
+                if self._msg_multicast is not None or len(self._msg_unicast) > 0:
+                    self.set_retransmission_timer()
+
+                # update number of failed acks per neighbor and check which ones should be considered to have failed
+                for neighbor_ip in neighbors_not_acked:
+                    self._number_of_failed_acks[neighbor_ip] = self._number_of_failed_acks.get(neighbor_ip, 0) + 1
+                self.check_neighbor_failures()
 
     #############################################
     # Get Sequence Number for CheckpointSN
@@ -227,6 +220,11 @@ class ReliableMessageTransmission(object):
             if msg is not None:
                 bt_sn = (msg.payload.boot_time, msg.payload.payload.sequence_number - 1)
 
+            for (_, msg) in self._msg_unicast.items():
+                if bt_sn[0] is None or bt_sn[0] is not None and \
+                        (bt_sn[0] < msg.payload.boot_time or
+                         bt_sn[0] == msg.payload.boot_time and bt_sn[1] > (msg.payload.payload.sequence_number - 1)):
+                    bt_sn = (msg.payload.boot_time, msg.payload.payload.sequence_number - 1)
         return bt_sn
 
     #############################################
@@ -234,15 +232,13 @@ class ReliableMessageTransmission(object):
     # Force neighbor failure in case neighbor does not ack successive control messages
     #############################################
     def check_neighbor_failures(self):
-        #self._interface.interface_logger.debug('CHECK NEIGHBOR FAILURES')
         with self._lock:
             for (neighbor_ip, ack_failures) in self._number_of_failed_acks.copy().items():
                 if ack_failures > ACK_FAILURE_THRESHOLD:
-                    print("NEIGHBOR FAILED DUE TO ACK LACK: " + neighbor_ip)
+                    print("\n\nNEIGHBOR FAILED DUE TO ACK LACK: " + neighbor_ip+ "\n\n")
                     self.force_neighbor_failure(neighbor_ip)
 
     def force_neighbor_failure(self, neighbor_ip):
-        #self._interface.interface_logger.debug('FORCE NEIGHBOR FAILURES')
         with self._lock:
             self._interface.force_neighbor_failure(neighbor_ip)
             self._number_of_failed_acks.pop(neighbor_ip, None)

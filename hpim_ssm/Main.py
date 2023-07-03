@@ -188,23 +188,26 @@ def list_routing_state():
         upstream_if_index = entry.inbound_interface_index
 
         for index in vif_indexes:
-            interface_state = entry.interface_state[index]
             interface_name = kernel.vif_index_to_name_dic[index]
-            try:
-                if index != upstream_if_index:
-                    assert_state = str(interface_state._assert_state)
-                    prune_state = str(interface_state._downstream_node_interest_state)
-                    is_forwarding = interface_state.is_forwarding()
-                else:
-                    assert_state = "--"
-                    prune_state = str(interface_state._upstream_node_interest_state)
-                    is_forwarding = "root"
-            except:
-                prune_state = "-"
-                assert_state = "-"
-                is_forwarding = "-"
+            if entry.interface_state.get(index, None) is not None:
+                interface_state = entry.interface_state[index]
+                try:
+                    if index != upstream_if_index:
+                        assert_state = str(interface_state._assert_state)
+                        prune_state = str(interface_state._downstream_node_interest_state)
+                        is_forwarding = interface_state.is_forwarding()
+                    else:
+                        assert_state = "--"
+                        prune_state = str(interface_state._upstream_node_interest_state)
+                        is_forwarding = "root"
+                except:
+                    prune_state = "-"
+                    assert_state = "-"
+                    is_forwarding = "-"
 
-            t.add_row([ip, group, interface_name, prune_state, assert_state, is_forwarding])
+                t.add_row([ip, group, interface_name, prune_state, assert_state, is_forwarding])
+            else:
+                t.add_row([ip, group, interface_name, "NoUpstreamInterest", "--", "root"])
     return str(t)
 
 

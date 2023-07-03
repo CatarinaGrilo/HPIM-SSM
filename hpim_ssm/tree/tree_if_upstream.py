@@ -29,17 +29,17 @@ class TreeInterfaceUpstream(TreeInterface):
         #    SFMRNewRootState.interfaces_roles_change(self)
 
 
-        # Originator state
-        # TODO TESTE SOCKET RECV DATA PCKTS
-        self.socket_is_enabled = True
-        (s, g) = self.get_tree_id()
-        interface_name = self.get_interface_name()
-        self.socket_pkt = DataPacketsSocket.get_s_g_bpf_filter_code(s, g, interface_name)
+        # # Originator state
+        # # TODO TESTE SOCKET RECV DATA PCKTS
+        # self.socket_is_enabled = True
+        # (s, g) = self.get_tree_id()
+        # interface_name = self.get_interface_name()
+        # self.socket_pkt = DataPacketsSocket.get_s_g_bpf_filter_code(s, g, interface_name)
 
-        # run receive method in background
-        receive_thread = Thread(target=self.socket_recv)
-        receive_thread.daemon = True
-        receive_thread.start()
+        # # run receive method in background
+        # receive_thread = Thread(target=self.socket_recv)
+        # receive_thread.daemon = True
+        # receive_thread.start()
 
         #self.logger.debug('Created RootInterface')
 
@@ -203,7 +203,7 @@ class TreeInterfaceUpstream(TreeInterface):
             except:
                 pass
 
-        self.socket_pkt.close()
+        #self.socket_pkt.close()
         super().delete()
 
     def is_downstream(self):

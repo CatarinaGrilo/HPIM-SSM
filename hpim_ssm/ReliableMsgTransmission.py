@@ -43,6 +43,9 @@ class ReliableMessageTransmission(object):
             self._msg_multicast = Packet(payload=PacketProtocolHeader(ph, boot_time=bt))
 
             self.set_retransmission_timer()
+            self._interface.interface_logger.debug('Sending Assert message with BootTime: ' + str(bt) +
+                                    '; Tree: ' + str(source) + ' ,' + str(group) +
+                                    '; SN: ' + str(sn) + "\n")
             self._interface.send(self._msg_multicast)
 
     def send_join(self, source, group, dst):
@@ -59,6 +62,10 @@ class ReliableMessageTransmission(object):
             self._msg_unicast[dst] = packet
 
             self.set_retransmission_timer()
+            self._interface.interface_logger.debug('Sending Join message with BootTime: ' + str(bt) +
+                                    '; Tree: ' + str(source) + ' ,' + str(group) +
+                                    '; SN: ' + str(sn) +
+                                    ' from neighbor ' + str(dst) + "\n")
             self._interface.send(packet, dst)
 
             if self._msg_multicast is not None:
@@ -78,6 +85,10 @@ class ReliableMessageTransmission(object):
             self._msg_unicast[dst] = packet
 
             self.set_retransmission_timer()
+            self._interface.interface_logger.debug('Sending Prune message with BootTime: ' + str(bt) +
+                                    '; Tree: ' + str(source) + ' ,' + str(group) +
+                                    '; SN: ' + str(sn) +
+                                    ' from neighbor ' + str(dst) + "\n")
             self._interface.send(packet, dst)
 
             if self._msg_multicast is not None:

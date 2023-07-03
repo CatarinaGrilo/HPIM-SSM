@@ -29,7 +29,7 @@ class TreeInterfaceDownstream(TreeInterface):
         else:
             self._downstream_node_interest_state = SFMRPruneState.NDI
 
-        #self.downstream_logger.debug('Downstream interest state transitions to ' + str(self._downstream_node_interest_state))
+        self.downstream_logger.debug('Downstream interest state transitions to ' + str(self._downstream_node_interest_state))
 
         # Assert State
         
@@ -79,7 +79,7 @@ class TreeInterfaceDownstream(TreeInterface):
         with self.get_state_lock():
             if new_state != self._downstream_node_interest_state:
                 self._downstream_node_interest_state = new_state
-                #self.downstream_logger.debug('Interface ' + str(self._interface_id) + ' Downstream interest state transitions to ' + str(new_state))
+                self.downstream_logger.debug('Downstream interest state transitions to ' + str(new_state))
 
                 self.verify_assert(creating_interface=False)
                 self.change_tree()

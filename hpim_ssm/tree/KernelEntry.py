@@ -48,65 +48,33 @@ class KernelEntry:
 
         # (S,G) starts OUT-TREE state... later check if node is in-tree via evaluate_in_tree_change()
         self._was_in_tree = False
+            
+        with self.CHANGE_STATE_LOCK:
+            for i in Main.kernel.vif_index_to_name_dic.keys():
+                try:
+                    assert_state = self._assert_interface_state.get(i, None)
 
-        if self.originator:
-            with self.CHANGE_STATE_LOCK:
-                for i in Main.kernel.vif_index_to_name_dic.keys():
-                    try:
-
-                        assert_state = self._assert_interface_state.get(i, None)
-
-                        if i != self.inbound_interface_index:
-                            interest_state = self._interest_interface_state.get(i, False)
-                            self.interface_state[i] = TreeInterfaceDownstream(self, i, self._rpc,
-                                                                              interest_state=interest_state,
-                                                                              best_neighbor_metric=assert_state,
-                                                                              was_root=False, was_in_tree=False)
-
-                    except:
-                        import traceback
-                        print(traceback.format_exc())
+                    if i == self.inbound_interface_index:
                         continue
+                    else:
+                        interest_state = self._interest_interface_state.get(i, False)
+                        self.interface_state[i] = TreeInterfaceDownstream(self, i, self._rpc,
+                                                                            interest_state=interest_state,
+                                                                            best_neighbor_metric=assert_state,
+                                                                            was_root=False, was_in_tree=False)
 
-                #self._was_in_tree = self.is_in_tree()
-                assert_state = self._assert_interface_state.get(self.inbound_interface_index, None)
-                interest_state = self._interest_interface_state.get(self.inbound_interface_index, False)
-                if self.inbound_interface_index is not None:
-                    self.interface_state[self.inbound_interface_index] = \
-                        TreeInterfaceUpstream(self, self.inbound_interface_index, interest_state=interest_state ,best_neighbor_metric=assert_state,
-                                              was_non_root=False, was_in_tree=False)
-            #self.evaluate_assert()
-            self.change()
-            self.evaluate_in_tree_change()
-            #print('Tree Originator created')
-
-        else:
-            with self.CHANGE_STATE_LOCK:
-                for i in Main.kernel.vif_index_to_name_dic.keys():
-                    try:
-                        assert_state = self._assert_interface_state.get(i, None)
-
-                        if i == self.inbound_interface_index:
-                            continue
-                        else:
-                            interest_state = self._interest_interface_state.get(i, False)
-                            self.interface_state[i] = TreeInterfaceDownstream(self, i, self._rpc,
-                                                                              interest_state=interest_state,
-                                                                              best_neighbor_metric=assert_state,
-                                                                              was_root=False, was_in_tree=False)
-
-                    except Exception:
-                        import traceback
-                        print(traceback.format_exc())
-                        continue
-                #if not self.originator:
+                except Exception:
+                    import traceback
+                    print(traceback.format_exc())
+                    continue
+            if not self.originator:
                 #self._was_in_tree = self.is_in_tree()
                 assert_state = self._assert_interface_state.get(self.inbound_interface_index, None)
                 interest_state = self._interest_interface_state.get(self.inbound_interface_index, False)
                 if self.inbound_interface_index is not None:
                     self.interface_state[self.inbound_interface_index] = \
                         TreeInterfaceUpstream(self, self.inbound_interface_index, interest_state=interest_state, best_neighbor_metric=assert_state,
-                                              was_non_root=False, was_in_tree=False)
+                                                was_non_root=False, was_in_tree=False)
             #self.evaluate_assert()
             self.change()
             self.evaluate_in_tree_change()
@@ -320,8 +288,8 @@ class KernelEntry:
             is_in_tree = self.is_in_tree()
             was_in_tree = self._was_in_tree
             self._was_in_tree = is_in_tree
-            if was_in_tree != is_in_tree and self.inbound_interface_index is not None:
-                if is_in_tree:
+            if was_in_tree != is_in_tree and self.interface_state.get(self.inbound_interface_index, None) is not None:
+                if is_in_tree and self.inbound_interface_index:
                     self.interface_state[self.inbound_interface_index].node_is_in_tree()
                 else:
                     self.interface_state[self.inbound_interface_index].node_is_out_tree()
@@ -389,7 +357,8 @@ class KernelEntry:
             if index in self.interface_state:
                 return
 
-            (_, _, _, inbound_interface_index) = UnicastRouting.get_unicast_info(self.source_ip)
+            (metric_administrative_distance, metric_cost, is_directly_connected, inbound_interface_index, potential_aw) \
+                  = UnicastRouting.get_unicast_info(self.source_ip)
             # TODO verificar is directly connected
 
             interest_state = False
@@ -405,7 +374,7 @@ class KernelEntry:
                                                                       was_root=False, was_in_tree=False)
 
             # new interface is of type root and there wasn't any root interface previously configured
-            elif inbound_interface_index == index and self.inbound_interface_index is None:
+            elif inbound_interface_index == index and self.inbound_interface_index is None and not is_directly_connected:
                 self.inbound_interface_index = index
                 self.interface_state[index] = TreeInterfaceUpstream(self, self.inbound_interface_index,
                                                                     interest_state=interest_state,
@@ -413,7 +382,7 @@ class KernelEntry:
                                                                     was_non_root=False, was_in_tree=False)
 
             # new interface is of type root and there was a root interface previously configured
-            elif inbound_interface_index == index and self.inbound_interface_index is not None:
+            elif inbound_interface_index == index and self.inbound_interface_index is not None and not is_directly_connected:
                 old_upstream_interface = self.interface_state.get(self.inbound_interface_index, None)
 
                 root_assert_state = assert_state

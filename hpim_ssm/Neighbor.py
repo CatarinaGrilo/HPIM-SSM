@@ -378,17 +378,13 @@ class Neighbor:
             return
 
         self.neighbor_state = state
-        self.neighbor_logger.debug('Neighbor state of ' + self.ip + ' transitions to ' + state.__name__)
-                                #    +
-                                #    ' with MyBootTime=' + str(self.my_snapshot_boot_time) +
-                                #    '; MySnapshotSN=' + str(self.my_snapshot_sequencer) +
-                                #    '; NeighborBootTime=' + str(self.time_of_boot) +
-                                #    '; NeighborSnapshotSN=' + str(self.neighbor_snapshot_sn))
+        self.neighbor_logger.debug('Neighbor state of ' + self.ip + ' transitions to ' + state.__name__ +
+                                   ' with MyBootTime=' + str(self.my_snapshot_boot_time) +
+                                   '; MySnapshotSN=' + str(self.my_snapshot_sequencer) +
+                                   '; NeighborBootTime=' + str(self.time_of_boot) +
+                                   '; NeighborSnapshotSN=' + str(self.neighbor_snapshot_sn))
         if state == Synced:
-            print("\n\tIN recheck all trees, neighbor: " + self.ip + "\n\n")
-            with self.contact_interface.neighbors_lock:
-                Main.kernel.recheck_all_trees(self.contact_interface.vif_index)
-            print("\n\tOUT OF recheck all trees, neighbor: " + self.ip + "\n\n")
+            Main.kernel.recheck_all_trees(self.contact_interface.vif_index)
 
 
     def install_tree_state(self, tree_state: list):
@@ -420,6 +416,8 @@ class Neighbor:
         """
         self.tree_interest_state.pop((source, group), None)
         self.tree_metric_state.pop((source, group), None)
+
+
 
     def get_known_trees(self):
         """
@@ -456,7 +454,7 @@ class Neighbor:
 
         if self.neighbor_state == Synced:
             self.time_of_last_update = time.time()
-            #self.set_hello_hold_time(holdtime)
+            self.set_hello_hold_time(holdtime)
             self.set_checkpoint_sn(checkpoint_sn)
         elif holdtime == 0:
             self.set_hello_hold_time(holdtime)
@@ -479,25 +477,30 @@ class Neighbor:
         """
         Decide if a packet received from this neighbor should be processed
         """
+        #self.neighbor_logger.debug("ENTROU RCV RELIABLE PACKET")
         if boot_time < self.time_of_boot:
+            #self.neighbor_logger.debug("SKOL1")
             return False
         elif boot_time > self.time_of_boot:
             self.time_of_boot = boot_time
             self.neighbor_snapshot_sn = 0
             self.start_sync_process()
+            #self.neighbor_logger.debug("SKOL2")
             return False
 
         if self.neighbor_state == Unknown or self.current_sync_sn == 0:
             #do not interpret control message without having the guarantee of
             # correct <NeighborBootTime; NeighborSnapshotSN> pair
+            #self.neighbor_logger.debug("SKOL3")
             return False
 
         last_received_sn = self.last_sequence_number.get(tree, 0)
 
         if sn <= self.neighbor_snapshot_sn or sn <= self.checkpoint_sn:
             # dont deliver to application
-            print("RCVD ", sn)
-            print("NSSN ", self.neighbor_snapshot_sn)
+            #print("RCVD ", sn)
+            #print("NSSN ", self.neighbor_snapshot_sn)
+            #self.neighbor_logger.debug("SKOL4")
             return False
         elif sn >= last_received_sn:
             (source, group) = tree
@@ -506,9 +509,8 @@ class Neighbor:
                                     my_snapshot_sn=self.my_snapshot_sequencer)
             ph = PacketProtocolHeader(ack, boot_time=self.contact_interface.time_of_boot)
             packet = Packet(payload=ph)
-            self.neighbor_logger.debug("SENDING ACK to: " + str(self.ip))
             self.contact_interface.send(packet, self.ip)
-            
+
             if sn > last_received_sn:
                 # update most recent sn received from this neighbor
                 self.last_sequence_number[tree] = sn
@@ -516,8 +518,9 @@ class Neighbor:
                 # deliver to application
                 return True
         # dont deliver to application
-        # print("RCVD ", sn)
-        # print("LAST TREE SN ", last_received_sn)
+        #print("RCVD ", sn)
+        #print("LAST TREE SN ", last_received_sn)
+        #self.neighbor_logger.debug("SKOL5")
         return False
 
     def recv_ack(self, my_boot_time, neighbor_boot_time, my_snapshot_sn, neighbor_snapshot):
@@ -614,8 +617,17 @@ class Neighbor:
         self.last_sequence_number.clear()
         del self.my_snapshot_multicast_routing_table[:]
 
+    def subscribe_nlt_expiration(self, tree_if):
+
+        with self.tree_interface_nlt_subscribers_lock:
+            if tree_if not in self.tree_interface_nlt_subscribers:
+                self.tree_interface_nlt_subscribers.append(tree_if)
+
+    def unsubscribe_nlt_expiration(self, tree_if):
+
+        with self.tree_interface_nlt_subscribers_lock:
+            if tree_if in self.tree_interface_nlt_subscribers:
+                self.tree_interface_nlt_subscribers.remove(tree_if)
+
     def get_neighbor_state(self):
-        if self.neighbor_state == Synced:
-            return True
-        else:
-            return False
+        return self.neighbor_state

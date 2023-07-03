@@ -42,6 +42,7 @@ else:
 
 
 
+
 class InterfaceProtocol(Interface):
     MCAST_GRP = '224.0.0.13'
 
@@ -83,10 +84,6 @@ class InterfaceProtocol(Interface):
 
         #igmp
         self.igmp_interest = {}
-        #messages
-        self.msg_queue = []
-        self.queue_lock = Lock()
-        self.msg_lock = Lock()
 
         # SOCKET
         ip_interface = netifaces.ifaddresses(interface_name)[netifaces.AF_INET][0]['addr']
@@ -118,7 +115,6 @@ class InterfaceProtocol(Interface):
 
         # hardcoded todo: delete when igmpv3 implemented!!!
 
-        Thread(target=self.manage_queue).start()
         self.force_send_hello()
     
     @staticmethod
@@ -130,7 +126,6 @@ class InterfaceProtocol(Interface):
         Get IP of this interface
         """
         return self.ip_interface
-
 
     def _receive(self, raw_bytes, ancdata, src_addr):
         """
@@ -157,89 +152,9 @@ class InterfaceProtocol(Interface):
                                                      packet.bytes(), digestmod=self.hash_function).digest()
                 if received_security_value != calculated_security_value:
                     return
-            
-            if packet.payload.get_pim_type() == PacketProtocolJoin.PIM_TYPE or \
-                packet.payload.get_pim_type() == PacketProtocolPrune.PIM_TYPE or \
-                packet.payload.get_pim_type() == PacketProtocolAssert.PIM_TYPE: 
 
-                neighbor_source_ip = packet.ip_header.ip_src
-                boot_time = packet.payload.boot_time
-                pkt_jt = packet.payload.payload  # type: PacketProtocolAssert
-
-                # Process msg to send ack
-                source_group = (pkt_jt.source, pkt_jt.group)
-                sequence_number = pkt_jt.sequence_number
-                neighbor = self.neighbors.get(neighbor_source_ip, None)
-                if neighbor is not None:
-                    neighbor.recv_reliable_packet(sequence_number, source_group, boot_time)
-                self.queue_lock.acquire()
-                self.msg_queue.append(packet)
-                self.queue_lock.release()
-                
-            elif packet.payload.get_pim_type() == PacketProtocolHello.PIM_TYPE:
-                ip = packet.ip_header.ip_src
-                options = packet.payload.payload.get_options()
-                hello_hold_time = options["HOLDTIME"].holdtime
-                neighbor = self.neighbors.get(ip, None)
-                if neighbor is not None:
-                    self.interface_logger.debug('Received Hello message with HelloHoldTime: ' + str(hello_hold_time) + 
-                                                ' from neighbor ' + ip)
-                    neighbor.set_hello_hold_time(hello_hold_time)
-                self.queue_lock.acquire()
-                self.msg_queue.append(packet)
-                self.queue_lock.release()
-
-            elif packet.payload.get_pim_type() == PacketProtocolAck.PIM_TYPE:
-                neighbor_source_ip = packet.ip_header.ip_src
-                neighbor_boot_time = packet.payload.boot_time
-                pkt_ack = packet.payload.payload  # type: PacketProtocolAck
-
-                # Process Ack msg
-                source_group = (pkt_ack.source, pkt_ack.group)
-                my_boot_time = pkt_ack.neighbor_boot_time
-                my_snapshot_sn = pkt_ack.neighbor_snapshot_sn
-                neighbor_snapshot_sn = pkt_ack.my_snapshot_sn
-                sequence_number = pkt_ack.sequence_number
-
-                # self.interface_logger.debug('Received Ack message with BootTime: ' + str(neighbor_boot_time) +
-                #                             '; NeighborBootTime: ' + str(my_boot_time) +
-                #                             '; MySnapshotSN: ' + str(neighbor_snapshot_sn) +
-                #                             '; NeighborSnapshotSN: ' + str(my_snapshot_sn) +
-                #                             '; Tree: ' + str(source_group) +
-                #                             '; SN: ' + str(sequence_number) +
-                #                             ' from neighbor ' + neighbor_source_ip + "\n")
-
-                reliable_transmission = self.reliable_transmission_buffer.get(source_group, None)
-                if reliable_transmission is not None:
-                    reliable_transmission.receive_ack(neighbor_source_ip, my_boot_time, sequence_number)
-            elif packet.payload.get_pim_type() == PacketProtocolHelloSync.PIM_TYPE:
-                self.queue_lock.acquire()
-                self.msg_queue.append(packet)
-                self.queue_lock.release()
-            
-    def manage_queue(self):
-        while True:
-            if len(self.msg_queue)!=0:
-                #if not self.msg_lock.locked():
-                    self.queue_lock.acquire()
-                    msg = self.msg_queue.pop(0)
-                    self.queue_lock.release()
-                    #Thread(target=self._processing, args=(msg,)).start()
-                    self._processing(msg)
-    
-    def _processing(self, packet):
-        """
-        Interface received a new control packet
-        """
-        #self.msg_lock.acquire()
-        
-        #self.interface_logger.debug('receive packet : ' + str(packet.payload.get_pim_type()))
-        # if packet.payload.get_pim_type() == PacketProtocolHelloSync.PIM_TYPE:
-        #     Thread(target=self.receive_sync, args=(packet,)).start()
-        if packet.payload.get_pim_type() != PacketProtocolAck.PIM_TYPE:
+            #self.interface_logger.debug('receive packet : ' + str(packet.payload.get_pim_type()))
             self.PKT_FUNCTIONS[packet.payload.get_pim_type()](self, packet)
-        
-        #self.msg_lock.release()
 
     def send(self, data: Packet, group_ip: str = MCAST_GRP):
         """
@@ -330,6 +245,35 @@ class InterfaceProtocol(Interface):
         self.hello_timer = Timer(hello_timer_time, self.send_hello)
         self.hello_timer.start()
 
+    # For tests purposes
+    # def force_send_join(self):
+    #     """
+    #     Force the transmission of a new Join message
+    #     Only applicable for R6 and R7
+    #     """
+
+    #     if self.get_ip() == '10.4.4.4' or self.get_ip() == '10.4.4.3':
+    #         source = "10.1.1.100"
+    #         group = "224.12.12.12"
+    #         print("\n\n-----Sending JOIN-------\n\n")
+    #         self.send_join(source, group)
+    #     else:
+    #         print("\n\n-----NOT Sending JOIN-------\n\n")
+
+    # # For tests purposes
+    # def force_send_prune(self):
+    #     """
+    #     Force the transmission of a new Prune message
+    #     Only applicable for R6 and R7
+    #     """
+
+    #     print("send prune")
+
+    #     if self.get_ip() == '10.4.4.4' or self.get_ip() == '10.4.4.3':
+    #         source = "10.1.1.100"
+    #         group = "224.12.12.12"
+    #         self.send_prune(source, group)
+
     def send_hello(self):
         """
         Send a new Hello message
@@ -338,7 +282,7 @@ class InterfaceProtocol(Interface):
         self.hello_timer.cancel()
 
         pim_payload = PacketProtocolHello()
-        pim_payload.add_option(PacketProtocolHelloHoldtime(holdtime= 4 * self.HELLO_PERIOD))
+        pim_payload.add_option(PacketProtocolHelloHoldtime(holdtime=4 * self.HELLO_PERIOD))
 
         with self.neighbors_lock:
             with self.sequencer_lock:
@@ -349,7 +293,6 @@ class InterfaceProtocol(Interface):
 
                 ph = PacketProtocolHeader(pim_payload, boot_time=self.time_of_boot)
         packet = Packet(payload=ph)
-        print("\n\n\nSENDING HELLO: " + str(self.ip_interface) + "\n\n\n")
         self.send(packet)
 
         # reschedule hello_timer
@@ -379,6 +322,7 @@ class InterfaceProtocol(Interface):
         self.neighbors.clear()
         self.clear_reliable_transmission()
 
+    
     def snapshot_multicast_routing_table(self, neighbor_ip):
         """
         Create a new snapshot
@@ -442,11 +386,9 @@ class InterfaceProtocol(Interface):
                 elif neighbor_assert_state.is_better_than(assert_state):
                     assert_state = neighbor_assert_state
 
-        #print("igmp_interest in interface " + str(self.ip_interface) + ": " + str(self.igmp_interest.get((source_group[0], source_group[1]))))         
         if not interest_state and self.igmp_interest.get((source_group[0], source_group[1]), False):
             interest_state = True
 
-        #print("In get tree state interface " +str(self.ip_interface) + ": ", interest_state)
         #self.interface_logger.debug('get tree state: metric state: ' + str(assert_state))
         return interest_state, assert_state
 
@@ -480,7 +422,6 @@ class InterfaceProtocol(Interface):
         Force an adjacent neighbor to be declared as failed.
         This is used to break an adjacency if a neighbor fails to ack successive control messages
         """
-        print("In force failure\n")
         with self.neighbors_lock:
             neighbor = self.neighbors.get(neighbor_ip, None)
             if neighbor is not None:
@@ -544,7 +485,7 @@ class InterfaceProtocol(Interface):
                 self.neighbors[ip].recv_hello(boot_time, hello_hold_time, checkpoint_sn)
             else:
                 self.new_neighbor(ip, boot_time, True)
-    
+
     def receive_sync(self, packet):
         """
         Received an Sync packet
@@ -578,12 +519,12 @@ class InterfaceProtocol(Interface):
                                     ' from neighbor ' + ip + "\n")
         self.interface_logger.debug(upstream_trees)
 
-        
-        if ip not in self.neighbors:
-            self.new_neighbor(ip, boot_time, detected_via_non_sync_msg=False)
+        with self.neighbors_lock:
+            if ip not in self.neighbors:
+                self.new_neighbor(ip, boot_time, detected_via_non_sync_msg=False)
 
-        self.neighbors[ip].recv_sync(upstream_trees, my_sn, neighbor_sn, boot_time, sync_sn, master_flag, more_flag,
-                                        my_boot_time, hello_options)
+            self.neighbors[ip].recv_sync(upstream_trees, my_sn, neighbor_sn, boot_time, sync_sn, master_flag, more_flag,
+                                         my_boot_time, hello_options)
 
     def receive_join(self, packet):
         """
@@ -613,10 +554,12 @@ class InterfaceProtocol(Interface):
                 return
 
             try:
-                #if neighbor.recv_reliable_packet(sequence_number, source_group, boot_time):
-                neighbor.tree_interest_state[source_group] = True
-                #print("NEIGHBOUR " + str(neighbor.ip) + " INTEREST: " + str(neighbor.tree_interest_state[source_group])+"\n")
-                Main.kernel.recv_interest_msg(source_group, self)
+                if neighbor.recv_reliable_packet(sequence_number, source_group, boot_time):
+                    neighbor.tree_interest_state[source_group] = True
+                    if neighbor.tree_metric_state.get(source_group, None) is not None:
+                        neighbor.tree_metric_state.pop(source_group)
+                    # self.neighbors_lock.release()
+                    Main.kernel.recv_interest_msg(source_group, self)
 
             except:
                 print(traceback.format_exc())
@@ -650,12 +593,14 @@ class InterfaceProtocol(Interface):
                 return
 
             try:
-                #if neighbor.recv_reliable_packet(sequence_number, source_group, boot_time):
-                # self.interface_logger.debug('Received Prune: trying')
-                neighbor.tree_interest_state[source_group] = False
-                #print("NEIGHBOUR " + str(neighbor.ip) + " INTEREST: " + str(neighbor.tree_interest_state[source_group])+"\n")
-                neighbor.tree_interest_state.pop(source_group)
-                Main.kernel.recv_interest_msg(source_group, self)
+                if neighbor.recv_reliable_packet(sequence_number, source_group, boot_time):
+                    # self.interface_logger.debug('Received Prune: trying')
+                    neighbor.tree_interest_state[source_group] = False
+                    neighbor.tree_interest_state.pop(source_group)
+                    if neighbor.tree_metric_state.get(source_group, None) is not None:
+                        neighbor.tree_metric_state.pop(source_group)
+                    # self.neighbors_lock.release()
+                    Main.kernel.recv_interest_msg(source_group, self)
 
             except:
                     print(traceback.format_exc())
@@ -675,13 +620,13 @@ class InterfaceProtocol(Interface):
         neighbor_snapshot_sn = pkt_ack.my_snapshot_sn
         sequence_number = pkt_ack.sequence_number
 
-        # self.interface_logger.debug('Received Ack message with BootTime: ' + str(neighbor_boot_time) +
-        #                             '; NeighborBootTime: ' + str(my_boot_time) +
-        #                             '; MySnapshotSN: ' + str(neighbor_snapshot_sn) +
-        #                             '; NeighborSnapshotSN: ' + str(my_snapshot_sn) +
-        #                             '; Tree: ' + str(source_group) +
-        #                             '; SN: ' + str(sequence_number) +
-        #                             ' from neighbor ' + neighbor_source_ip + "\n")
+        self.interface_logger.debug('Received Ack message with BootTime: ' + str(neighbor_boot_time) +
+                                    '; NeighborBootTime: ' + str(my_boot_time) +
+                                    '; MySnapshotSN: ' + str(neighbor_snapshot_sn) +
+                                    '; NeighborSnapshotSN: ' + str(my_snapshot_sn) +
+                                    '; Tree: ' + str(source_group) +
+                                    '; SN: ' + str(sequence_number) +
+                                    ' from neighbor ' + neighbor_source_ip + "\n")
 
 
         # check neighbor existence
@@ -736,12 +681,15 @@ class InterfaceProtocol(Interface):
                 return
 
             try:
-                #if neighbor.recv_reliable_packet(sequence_number, source_group, boot_time):
-                #neighbor.tree_interest_state.pop(source_group, None)
-                neighbor.tree_metric_state[source_group] = received_metric
-                if received_metric.metric_preference == 2147483647 and received_metric.route_metric == 4294967295:
-                    neighbor.tree_metric_state.pop(source_group)
-                Main.kernel.recv_assert_msg(source_group, self)
+                if neighbor.recv_reliable_packet(sequence_number, source_group, boot_time):
+                    #neighbor.tree_interest_state.pop(source_group, None)
+                    neighbor.tree_metric_state[source_group] = received_metric
+                    if received_metric.metric_preference == 2147483647 and received_metric.route_metric == 4294967295:
+                        neighbor.tree_metric_state.pop(source_group)
+                        if neighbor.tree_interest_state.get(source_group, None) is not None:
+                            neighbor.tree_interest_state.pop(source_group)
+                    #self.neighbors_lock.release()
+                    Main.kernel.recv_assert_msg(source_group, self)
 
 
             except:
@@ -753,7 +701,7 @@ class InterfaceProtocol(Interface):
         PacketProtocolAssert.PIM_TYPE: receive_assert,
         PacketProtocolJoin.PIM_TYPE: receive_join,
         PacketProtocolPrune.PIM_TYPE: receive_prune,
-        #PacketProtocolAck.PIM_TYPE: receive_ack,
+        PacketProtocolAck.PIM_TYPE: receive_ack,
     }
 
     def receive_igmp(self, source_group, interest):
@@ -803,11 +751,9 @@ class InterfaceProtocol(Interface):
         Send a new Join message
         """
         tree = (source, group)
-        neighbor = self.neighbors.get(dst, None)
-        if neighbor is not None and neighbor.get_neighbor_state():
-            with self.sequencer_lock:
-                with self.reliable_transmission_lock:
-                    self.get_reliable_message_transmission(tree).send_join(source, group, dst)
+        with self.sequencer_lock:
+            with self.reliable_transmission_lock:
+                self.get_reliable_message_transmission(tree).send_join(source, group, dst)
 
     def send_prune(self, source, group,dst):
         """
@@ -815,11 +761,9 @@ class InterfaceProtocol(Interface):
         """
 
         tree = (source, group)
-        neighbor = self.neighbors.get(dst, None)
-        if neighbor is not None and neighbor.get_neighbor_state():
-            with self.sequencer_lock:
-                with self.reliable_transmission_lock:
-                    self.get_reliable_message_transmission(tree).send_prune(source, group, dst)
+        with self.sequencer_lock:
+            with self.reliable_transmission_lock:
+                self.get_reliable_message_transmission(tree).send_prune(source, group, dst)
 
     def neighbor_start_synchronization(self, neighbor_ip, my_snapshot_bt, my_snapshot_sn):
         """

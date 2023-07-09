@@ -1,5 +1,6 @@
 from utils import TYPE_CHECKING
 
+import Main
 from .assert_state import AssertState
 
 if TYPE_CHECKING:
@@ -15,7 +16,8 @@ class SFMRNonRootState:
         """
         #todo analyze this
         interface.logger.debug('interface_roles_change')
-        if interface._assert_state != AssertState.NotAvailable:
+        if Main.kernel.assert_state_per_interface.get((interface._kernel_entry.source_ip, interface._interface_id), None) != AssertState.NotAvailable:
+            Main.kernel.assert_state_per_interface[(interface._kernel_entry.source_ip, interface._interface_id)] = AssertState.NotAvailable
             interface.send_assert_cancel()
 
     @staticmethod

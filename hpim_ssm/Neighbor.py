@@ -393,19 +393,15 @@ class Neighbor:
         Interest/NoInterest messages concurrently to an ongoing synchronization, verify if
         trees included in Sync message have state fresher than the one that is already stored (in a non-Sync message)
         """
-        # print("\n\n\nTREE STATE:")
-        # print(tree_state)
         for t in tree_state:
             tree_id = (t.source, t.group)
             metric_flag = t.metric_flag
             assert_metric = t.assert_metric
-            # print("\n\nSYNC ASSERT METRIC: " + str(assert_metric) + '\n\n')
             if self.last_sequence_number.get(tree_id, 0) > self.neighbor_snapshot_sn:
                 continue
 
-            # if t.metric_preference == 0x7FFFFFFF and t.metric == 0xFFFFFFFF:
             if metric_flag:
-                self.tree_metric_state[tree_id] = AssertMetric(metric_preference=assert_metric[0].metric_preference,
+                self.tree_metric_state[tree_id[0]] = AssertMetric(metric_preference=assert_metric[0].metric_preference,
                                                                route_metric=assert_metric[0].metric, ip_address=self.ip)
             else:
                 self.tree_interest_state[tree_id] = True
@@ -415,7 +411,7 @@ class Neighbor:
         Remove all stored state of the neighbor node regarding trees in Unknown state
         """
         self.tree_interest_state.pop((source, group), None)
-        self.tree_metric_state.pop((source, group), None)
+        self.tree_metric_state.pop((source), None)
 
 
 
@@ -423,10 +419,13 @@ class Neighbor:
         """
         Get all trees that I am storing state regarding this neighbor node
         """
-        a = set(self.tree_metric_state.keys())
-        b = set(self.tree_interest_state.keys())
-        return a.union(b)
-        #return b
+        return set(self.tree_interest_state.keys())
+    
+    def get_known_sources(self):
+        """
+        Get all sources' RPCS that I am storing state regarding this neighbor node
+        """
+        return set(self.tree_metric_state.keys())
 
     ######################################################################
     # Send Messages
@@ -491,16 +490,12 @@ class Neighbor:
         if self.neighbor_state == Unknown or self.current_sync_sn == 0:
             #do not interpret control message without having the guarantee of
             # correct <NeighborBootTime; NeighborSnapshotSN> pair
-            #self.neighbor_logger.debug("SKOL3")
             return False
 
         last_received_sn = self.last_sequence_number.get(tree, 0)
 
         if sn <= self.neighbor_snapshot_sn or sn <= self.checkpoint_sn:
             # dont deliver to application
-            #print("RCVD ", sn)
-            #print("NSSN ", self.neighbor_snapshot_sn)
-            #self.neighbor_logger.debug("SKOL4")
             return False
         elif sn >= last_received_sn:
             (source, group) = tree
@@ -518,9 +513,6 @@ class Neighbor:
                 # deliver to application
                 return True
         # dont deliver to application
-        #print("RCVD ", sn)
-        #print("LAST TREE SN ", last_received_sn)
-        #self.neighbor_logger.debug("SKOL5")
         return False
 
     def recv_ack(self, my_boot_time, neighbor_boot_time, my_snapshot_sn, neighbor_snapshot):
@@ -587,15 +579,12 @@ class Neighbor:
         Obtain Interest state regarding neighbor node... This information is obtained based on previous
         messages received from this neighbor node that were stored in the neighbor structure
         """
-
         if self.neighbor_state != Synced:
             # do not interpret stored state if not Synced
             return False, None
         else:
-            assert_state = self.tree_metric_state.get(tree, None)
+            assert_state = self.tree_metric_state.get(tree[0], None)
             interest_state = self.tree_interest_state.get(tree, False)
-            #print("\n\n\n\n\n-------INTEREST NEIGHBOR ", self.ip, ":", interest_state)
-            #print("UPSTREAM NEIGHBOR ", self.ip, ":", assert_state)
             return interest_state, assert_state
 
 

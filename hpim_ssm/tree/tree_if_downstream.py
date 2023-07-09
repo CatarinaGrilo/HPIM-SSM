@@ -32,11 +32,17 @@ class TreeInterfaceDownstream(TreeInterface):
         self.downstream_logger.debug('Downstream interest state transitions to ' + str(self._downstream_node_interest_state))
 
         # Assert State
-        
-        self._assert_state = AssertState.NotAvailable
 
-        #self.assert_logger.debug('Assert state transitions to ' + str(self._assert_state))
-        self._my_assert_rpc = AssertMetric(rpc.metric_preference, rpc.route_metric, self.get_ip())
+        if Main.kernel.assert_state_per_interface.get((self._kernel_entry.source_ip, self._interface_id), None) is None:
+            Main.kernel.assert_state_per_interface[(self._kernel_entry.source_ip, self._interface_id)] = AssertState.NotAvailable
+            self.assert_logger.debug('Assert state transitions to ' + 
+                                    str(Main.kernel.assert_state_per_interface.get((self._kernel_entry.source_ip, self._interface_id), None)))
+        #self._assert = Main.kernel.assert_state_per_interface[(self._kernel_entry.source_ip, self._interface_id)]
+        self._assert=AssertState.NotAvailable
+
+        if Main.kernel.my_rpc.get((self._kernel_entry.source_ip, self._interface_id), None) is None:
+            Main.kernel.my_rpc[(self._kernel_entry.source_ip, self._interface_id)] = AssertMetric(rpc.metric_preference, rpc.route_metric, self.get_ip())
+        
         self.verify_assert(creating_interface=True)
 
 
@@ -61,9 +67,10 @@ class TreeInterfaceDownstream(TreeInterface):
         """
 
         with self.get_state_lock():
-            if new_state != self._assert_state:
-                self._assert_state = new_state
-                #self.assert_logger.debug('Interface ' + str(self._interface_id) + 'Assert state transitions to ' + str(new_state))
+            if new_state != Main.kernel.assert_state_per_interface.get((self._kernel_entry.source_ip, self._interface_id), None):
+                Main.kernel.assert_state_per_interface[(self._kernel_entry.source_ip, self._interface_id)] = new_state
+                self._assert = new_state
+                self.assert_logger.debug('Assert state transitions to ' + str(new_state))
 
                 if not creating_interface:
                     self.change_tree()
@@ -106,8 +113,8 @@ class TreeInterfaceDownstream(TreeInterface):
     ###########################################
 
     def get_sync_state(self, neighbor_ip):
-        if self.are_downstream_nodes_interested():
-            return (self._my_assert_rpc)
+        if self.are_downstream_nodes_interested() and Main.kernel.my_rpc.get((self._kernel_entry.source_ip, self._interface_id), None) is not None:
+            return (Main.kernel.my_rpc.get((self._kernel_entry.source_ip, self._interface_id), None))
         else:
             return False
 
@@ -116,10 +123,6 @@ class TreeInterfaceDownstream(TreeInterface):
         """
         Determine if this interface must be included in the OIL at the multicast routing table
         """
-
-        #return self.is_in_tree() and self.is_assert_winner() and not self.is_interface_connected_to_source()
-        #if self.is_in_tree() and self.is_assert_winner():
-            #self.downstream_logger.debug('Interface is FORWARDING')
         return self.is_in_tree() and self.is_assert_winner()
 
     def is_in_tree(self):
@@ -145,8 +148,7 @@ class TreeInterfaceDownstream(TreeInterface):
         Clear all state from this interface regarding this tree
         """
         super().delete()
-        self._my_assert_rpc = None
-        self._assert_state = None
+        self._assert = None
         #self.send_assert_cancel()
 
     def is_downstream(self):
@@ -155,16 +157,17 @@ class TreeInterfaceDownstream(TreeInterface):
     def is_upstream(self):
         return False
 
-
     def notify_rpc_change(self, new_rpc: Metric):
         """
         The router suffered an RPC regarding the subnet of the tree's source
         """
-        if new_rpc == self._my_assert_rpc:
+        if new_rpc == Main.kernel.my_rpc.get((self._kernel_entry.source_ip, self._interface_id), None) and\
+            self._assert == Main.kernel.assert_state_per_interface[(self._kernel_entry.source_ip, self._interface_id)]:
             return
 
-        self._my_assert_rpc = AssertMetric(new_rpc.metric_preference, new_rpc.route_metric, self.get_ip())
-        if not self.is_interface_connected_to_source() and self._assert_state == AssertState.Winner:
+        Main.kernel.my_rpc[(self._kernel_entry.source_ip, self._interface_id)] = AssertMetric(new_rpc.metric_preference, new_rpc.route_metric, self.get_ip())
+        if not self.is_interface_connected_to_source() and \
+            Main.kernel.assert_state_per_interface.get((self._kernel_entry.source_ip, self._interface_id), None) == AssertState.Winner:
             SFMRNonRootState.my_rpc_changes(self)
         self.verify_assert(creating_interface=False)
 
@@ -172,59 +175,46 @@ class TreeInterfaceDownstream(TreeInterface):
         """
         verify changes in the assert due to changes in the interest
         """
-        # self.downstream_logger.debug("entrou verify_assert")
         # self.downstream_logger.debug('best_neighbor_metric: ' + str(self._best_neighbor_metric))
 
-        '''
-        # NDI -> DI
-        # MY RPC CHANGES AND BECOMES THE BEST
-        # RECEIVE ASSERT WITH WORSE RPC THAN MINE
-        # THE AW IS GONE
-        if self.is_downstream() and self.is_in_tree() and not self.is_assert_winner():
-            self.downstream_logger.debug('va1')
-            if self._best_neighbor_metric is None:
-                self.downstream_logger.debug('va12')
-                self.set_assert_state(AssertState.Winner, creating_interface)
-
-            elif self._my_assert_rpc.is_better_than(self._best_neighbor_metric):
-                self.downstream_logger.debug('va2')
-                self.set_assert_state(AssertState.Winner, creating_interface)
-
-        # DI -> NDI
-        elif self.is_downstream() and not self.is_in_tree() and self.is_assert_winner():
-            self.downstream_logger.debug('va3')
-            self.set_assert_state(AssertState.Loser, creating_interface)
-            self.downstream_logger.debug('va4')
-
-        # MY RPC CHANGES AND I AM NO LONGER AW
-        # RECEIVE ASSERT WITH BETTER RPC THAN MINE
-        elif self.is_downstream() and self.is_in_tree() and self.is_assert_winner():
-            self.downstream_logger.debug('va5')
-            if not self._my_assert_rpc.is_better_than(self._best_neighbor_metric):
-                self.downstream_logger.debug('va6')
-                self.set_assert_state(AssertState.Loser, creating_interface)
-        '''
-        ###################################################################
-        previous_assert_state = self._assert_state
+        previous_assert_state = Main.kernel.assert_state_per_interface.get((self._kernel_entry.source_ip, self._interface_id), None)
         if self.is_in_tree():
-            if self._best_neighbor_metric is None or self._my_assert_rpc.is_better_than(self._best_neighbor_metric):
-                if self._assert_state != AssertState.Winner:
+            if Main.kernel.best_assert_neighbor_per_interface.get((self._kernel_entry.source_ip, self._interface_id), None) is None \
+                or Main.kernel.my_rpc.get((self._kernel_entry.source_ip, self._interface_id), None).is_better_than(Main.kernel.best_assert_neighbor_per_interface.get((self._kernel_entry.source_ip, self._interface_id), None)):
+                if Main.kernel.assert_state_per_interface.get((self._kernel_entry.source_ip, self._interface_id), None) != AssertState.Winner:
                     self.set_assert_state(AssertState.Winner, creating_interface)
                     if previous_assert_state == AssertState.NotAvailable:
                         self.send_assert()
 
-            elif not self._my_assert_rpc.is_better_than(self._best_neighbor_metric):
+            elif not Main.kernel.my_rpc.get((self._kernel_entry.source_ip, self._interface_id), None).is_better_than(Main.kernel.best_assert_neighbor_per_interface.get((self._kernel_entry.source_ip, self._interface_id), None)):
                 self.set_assert_state(AssertState.Loser, creating_interface)
                 if previous_assert_state == AssertState.NotAvailable:
                     self.send_assert()
 
         elif not self.is_in_tree():
-            if self._assert_state != AssertState.NotAvailable:
-                self.set_assert_state(AssertState.NotAvailable, creating_interface)
-                self.send_assert_cancel()
-            
+            routing_entries = []
+            still_are_groups_DI = False
+            for a in list(Main.kernel.routing.values()):
+                for b in list(a.values()):
+                    routing_entries.append(b)
+            for entry in routing_entries:
+                upstream_if_index = entry.inbound_interface_index
+                if entry.interface_state.get(self._interface_id, None) is not None:
+                    interface_state = entry.interface_state[self._interface_id]
+                    if self._interface_id != upstream_if_index:
+                        if interface_state._downstream_node_interest_state == SFMRPruneState.DI:
+                            still_are_groups_DI=True
+                            break
+            if not still_are_groups_DI:
+                if Main.kernel.assert_state_per_interface.get((self._kernel_entry.source_ip, self._interface_id), None) != AssertState.NotAvailable:
+                    self.set_assert_state(AssertState.NotAvailable, creating_interface)
+                    self.send_assert_cancel()
 
-        #self.downstream_logger.debug("saiu verify assert")
+        if self._assert != Main.kernel.assert_state_per_interface[(self._kernel_entry.source_ip, self._interface_id)]:
+            self._assert = Main.kernel.assert_state_per_interface[(self._kernel_entry.source_ip, self._interface_id)]
+            if not creating_interface:
+                    self.change_tree()
+                    self.evaluate_in_tree()
 
     def my_assert_metric(self):
         """
@@ -232,7 +222,7 @@ class TreeInterfaceDownstream(TreeInterface):
         @rtype: AssertMetric
         """
         if self.is_downstream():
-            return self._my_assert_rpc
+            return Main.kernel.my_rpc.get((self._kernel_entry.source_ip, self._interface_id), None)
         else:
             return AssertMetric.infinite_assert_metric()
 
@@ -240,11 +230,14 @@ class TreeInterfaceDownstream(TreeInterface):
         """
         Determine if this interface is responsible for forwarding multicast data packets
         """
-        return self._assert_state is not None and self._assert_state.is_assert_winner()
+        return self._assert is not None and self._assert.is_assert_winner()
 
     def is_assert_loser(self):
-        return self._assert_state is not None and self._assert_state.is_assert_winner()
 
+        if Main.kernel.assert_state_per_interface.get((self._kernel_entry.source_ip, self._interface_id), None) is not None:
+            return not Main.kernel.assert_state_per_interface.get((self._kernel_entry.source_ip, self._interface_id), None).is_assert_winner()
+        else:
+            return False
 
     ###########################################
     # Send packets
@@ -256,7 +249,7 @@ class TreeInterfaceDownstream(TreeInterface):
         """
         (source, group) = self.get_tree_id()
         if self.get_interface() is not None and self.is_downstream():
-            self.get_interface().send_assert(source, group, self._my_assert_rpc)
+            self.get_interface().send_assert(source, group, Main.kernel.my_rpc[(self._kernel_entry.source_ip, self._interface_id)])
 
     def send_assert_cancel(self):
         """

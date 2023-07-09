@@ -5,7 +5,7 @@ import random
 import socket
 import time
 import traceback
-from threading import Timer, RLock, Thread, Lock
+from threading import Timer, RLock
 
 
 import netifaces
@@ -39,9 +39,6 @@ else:
     from Packet.PacketProtocolInterest import PacketProtocolPrune, PacketProtocolJoin
     from Packet.PacketProtocolSync import PacketProtocolHelloSyncEntry
     from Packet.PacketProtocolAck import PacketProtocolAck
-
-
-
 
 class InterfaceProtocol(Interface):
     MCAST_GRP = '224.0.0.13'
@@ -113,12 +110,13 @@ class InterfaceProtocol(Interface):
         super().__init__(interface_name, s, s, vif_index)
         super().enable()
 
-        # hardcoded todo: delete when igmpv3 implemented!!!
-
         self.force_send_hello()
     
     @staticmethod
     def _get_address_family():
+        """
+        Get address family for this interface
+        """
         return socket.AF_INET
     
     def get_ip(self):
@@ -152,8 +150,6 @@ class InterfaceProtocol(Interface):
                                                      packet.bytes(), digestmod=self.hash_function).digest()
                 if received_security_value != calculated_security_value:
                     return
-
-            #self.interface_logger.debug('receive packet : ' + str(packet.payload.get_pim_type()))
             self.PKT_FUNCTIONS[packet.payload.get_pim_type()](self, packet)
 
     def send(self, data: Packet, group_ip: str = MCAST_GRP):
@@ -170,16 +166,22 @@ class InterfaceProtocol(Interface):
         super().send(data=data.bytes(), group_ip=group_ip)
 
     def is_security_enabled(self):
+        """
+        Check if security is enabled
+        """
         return self.get_security_key() != b''
 
     def get_security_key(self):
+        """
+        Get security key
+        """
         return self.security_key
 
     def add_security_key(self, security_identifier, security_function, security_key):
         """
         Set Security information for the HMAC of control messages. Set the Security Identifier used to identify
-         the Hash algorithm of received control messages, the corresponding hash algorithm and the SecurityKey used to
-          calculate the HMAC
+        the Hash algorithm of received control messages, the corresponding hash algorithm and the SecurityKey used to
+        calculate the HMAC
         """
         self.security_id = security_identifier
         self.security_len = len(hashlib.new(security_function).digest())
@@ -218,7 +220,6 @@ class InterfaceProtocol(Interface):
         """
         Get the CheckpointSN to be transmitted in a new Hello message
         """
-        #print("A ENTRAR CHECK_SN")
         with self.neighbors_lock:
             with self.sequencer_lock:
                 with self.reliable_transmission_lock:
@@ -230,7 +231,6 @@ class InterfaceProtocol(Interface):
                         if msg_boot_time == time_of_boot and checkpoint_sn > msg_checkpoint_sn:
                             checkpoint_sn = msg_checkpoint_sn
 
-                    #print("A SAIR CHECK_SN")
                     return (time_of_boot, checkpoint_sn)
 
     # Random interval for initial Hello message on bootup or triggered Hello message to a rebooting neighbor
@@ -244,35 +244,6 @@ class InterfaceProtocol(Interface):
         hello_timer_time = random.uniform(0, self.TRIGGERED_HELLO_PERIOD)
         self.hello_timer = Timer(hello_timer_time, self.send_hello)
         self.hello_timer.start()
-
-    # For tests purposes
-    # def force_send_join(self):
-    #     """
-    #     Force the transmission of a new Join message
-    #     Only applicable for R6 and R7
-    #     """
-
-    #     if self.get_ip() == '10.4.4.4' or self.get_ip() == '10.4.4.3':
-    #         source = "10.1.1.100"
-    #         group = "224.12.12.12"
-    #         print("\n\n-----Sending JOIN-------\n\n")
-    #         self.send_join(source, group)
-    #     else:
-    #         print("\n\n-----NOT Sending JOIN-------\n\n")
-
-    # # For tests purposes
-    # def force_send_prune(self):
-    #     """
-    #     Force the transmission of a new Prune message
-    #     Only applicable for R6 and R7
-    #     """
-
-    #     print("send prune")
-
-    #     if self.get_ip() == '10.4.4.4' or self.get_ip() == '10.4.4.3':
-    #         source = "10.1.1.100"
-    #         group = "224.12.12.12"
-    #         self.send_prune(source, group)
 
     def send_hello(self):
         """
@@ -326,36 +297,32 @@ class InterfaceProtocol(Interface):
     def snapshot_multicast_routing_table(self, neighbor_ip):
         """
         Create a new snapshot
-        This method will return the current BootTime, SnapshotSN and all trees to be included in Sync messages
+        This method will return the current BootTime, SnapshotSN and all trees to be included in Sync messages in form of Join 
+        and the RPC for all sources in form of Assert
         """
         with Main.kernel.rwlock:
             with self.sequencer_lock:
                 (snapshot_bt, snapshot_sn) = self.get_sequence_number()
 
-                trees_to_sync = Main.kernel.snapshot_multicast_routing_table(self.vif_index, neighbor_ip)  # type: dict
+                trees_to_sync, sources_to_syncs = Main.kernel.snapshot_multicast_routing_table(self.vif_index, neighbor_ip)  # type: dict
                 tree_to_sync_in_msg_format = {}
                 metric = []
 
                 for (source_group, state) in trees_to_sync.items():
-                    self.interface_logger.debug('added tree in sync message: router is interested!')
-                    #print("NA SNAPSHOT NA INTERFACEPROTOCOL")
-                    #print("O STATE E")
-                    #print(str(state))
                     if state is None:
+                        self.interface_logger.debug('added tree in sync message: router is interested!')
                         metric_flag = 0
-                        #print("\n\nSYNC JOIN")
-                    else:
+                        tree_to_sync_in_msg_format[source_group] = PacketProtocolHelloSyncEntry(metric_flag, source_group[0],
+                                                                    source_group[1], metric)
+                for (source_group, state) in sources_to_syncs.items():
+                    if state is not None:
+                        self.interface_logger.debug('added source in sync message: router is interested!')
                         metric_flag = 1
                         metric_value = PacketNewProtocolSyncMetric(state.metric_preference, state.route_metric)
-                        #print("\n\nSYNC ASSERT METRIC: " + str(metric_value.metric) + ' ' + str(metric_value.metric_preference) +'\n\n')
                         metric.append(metric_value)
 
-                    tree_to_sync_in_msg_format[source_group] = PacketProtocolHelloSyncEntry(metric_flag, source_group[0],
-                                                                source_group[1], metric)
-                    #print(len(metric))
-                    #print("\n\nTREE SYNC: " + str(tree_to_sync_in_msg_format[source_group].assert_metric[0].metric) + '\n\n')
-
-
+                        tree_to_sync_in_msg_format[source_group] = PacketProtocolHelloSyncEntry(metric_flag, source_group[0],
+                                                                    source_group[1], metric)
                 return (snapshot_bt, snapshot_sn, tree_to_sync_in_msg_format)
 
     ##############################################
@@ -364,13 +331,10 @@ class InterfaceProtocol(Interface):
     def get_tree_state(self, source_group):
         """
         Get Interest state regarding a given tree...
-        Regarding Interest this method will return "Interested/True" if at least one neighbor is interested
-            or "NotInterested" if all neighbors are not interested in traffic regarding (source_group) tree
+        Regarding Interest this method will return "True" if at least one neighbor or host is interested
+        or "False" if all neighbors are not interested in traffic regarding (S,G) tree
         Regarding the assert this method returns the neighbor that offers the best RPC metric
         """
-
-        #print("IN InterfaceProtocol GET_TREE_STATE")
-
         interest_state = False
         assert_state = None
 
@@ -388,8 +352,6 @@ class InterfaceProtocol(Interface):
 
         if not interest_state and self.igmp_interest.get((source_group[0], source_group[1]), False):
             interest_state = True
-
-        #self.interface_logger.debug('get tree state: metric state: ' + str(assert_state))
         return interest_state, assert_state
 
     def remove_tree_state(self, source_ip, group_ip):
@@ -471,7 +433,6 @@ class InterfaceProtocol(Interface):
         """
         ip = packet.ip_header.ip_src
         boot_time = packet.payload.boot_time
-        #print("ip = ", ip)
         options = packet.payload.payload.get_options()
         hello_hold_time = options["HOLDTIME"].holdtime
         checkpoint_sn = 0
@@ -530,7 +491,6 @@ class InterfaceProtocol(Interface):
         """
         Received a Join packet
         """
-        #print("\n\n-----Received JOIN-------\n\n")
         neighbor_source_ip = packet.ip_header.ip_src
         boot_time = packet.payload.boot_time
 
@@ -549,16 +509,12 @@ class InterfaceProtocol(Interface):
         with self.neighbors_lock:
             neighbor = self.neighbors.get(neighbor_source_ip, None)
             if neighbor is None:
-                # self.interface_logger.debug("Received Join: New neighbor")
                 self.new_neighbor(neighbor_source_ip, boot_time)
                 return
 
             try:
                 if neighbor.recv_reliable_packet(sequence_number, source_group, boot_time):
                     neighbor.tree_interest_state[source_group] = True
-                    if neighbor.tree_metric_state.get(source_group, None) is not None:
-                        neighbor.tree_metric_state.pop(source_group)
-                    # self.neighbors_lock.release()
                     Main.kernel.recv_interest_msg(source_group, self)
 
             except:
@@ -569,7 +525,6 @@ class InterfaceProtocol(Interface):
         """
         Received a Prune packet
         """
-        #print("\n\n-----Received Prune-------\n\n")
         neighbor_source_ip = packet.ip_header.ip_src
         boot_time = packet.payload.boot_time
 
@@ -594,12 +549,8 @@ class InterfaceProtocol(Interface):
 
             try:
                 if neighbor.recv_reliable_packet(sequence_number, source_group, boot_time):
-                    # self.interface_logger.debug('Received Prune: trying')
                     neighbor.tree_interest_state[source_group] = False
                     neighbor.tree_interest_state.pop(source_group)
-                    if neighbor.tree_metric_state.get(source_group, None) is not None:
-                        neighbor.tree_metric_state.pop(source_group)
-                    # self.neighbors_lock.release()
                     Main.kernel.recv_interest_msg(source_group, self)
 
             except:
@@ -640,10 +591,6 @@ class InterfaceProtocol(Interface):
                 with self.reliable_transmission_lock:
                     if not neighbor.recv_ack(my_boot_time, neighbor_boot_time, my_snapshot_sn, neighbor_snapshot_sn):
                         return
-
-                    # if my_boot_time != self.time_of_boot:
-                    #    return
-
                     reliable_transmission = self.reliable_transmission_buffer.get(source_group, None)
                     if reliable_transmission is not None:
                         reliable_transmission.receive_ack(neighbor_source_ip, my_boot_time, sequence_number)
@@ -682,14 +629,10 @@ class InterfaceProtocol(Interface):
 
             try:
                 if neighbor.recv_reliable_packet(sequence_number, source_group, boot_time):
-                    #neighbor.tree_interest_state.pop(source_group, None)
-                    neighbor.tree_metric_state[source_group] = received_metric
+                    neighbor.tree_metric_state[pkt_jt.source] = received_metric
                     if received_metric.metric_preference == 2147483647 and received_metric.route_metric == 4294967295:
-                        neighbor.tree_metric_state.pop(source_group)
-                        if neighbor.tree_interest_state.get(source_group, None) is not None:
-                            neighbor.tree_interest_state.pop(source_group)
-                    #self.neighbors_lock.release()
-                    Main.kernel.recv_assert_msg(source_group, self)
+                        neighbor.tree_metric_state.pop(pkt_jt.source)
+                    Main.kernel.recv_assert_msg(pkt_jt.source, self)
 
 
             except:
@@ -708,15 +651,10 @@ class InterfaceProtocol(Interface):
         """
         Received a Join packet
         """
-        #print("\n\n-----Received JOIN-------\n\n")
-
         self.interface_logger.debug('Received IGMP report for Tree: ' + str(source_group) +
                                     '; Interest: ' + str(interest) + "\n")
         
         self.igmp_interest[(source_group[0], source_group[1])] = interest
-
-        #print("dic igmp interest " + str(self.igmp_interest))
-
         # check neighbor existence
         with self.neighbors_lock:
             Main.kernel.recv_interest_msg(source_group, self)
@@ -739,8 +677,9 @@ class InterfaceProtocol(Interface):
 
     def send_assert(self, source, group, rpc):
         """
-        Send a new Assert message
+        Send a new Assert message (S,*)
         """
+        group = '0.0.0.0'
         tree = (source, group)
         with self.sequencer_lock:
             with self.reliable_transmission_lock:
@@ -748,7 +687,7 @@ class InterfaceProtocol(Interface):
 
     def send_join(self, source, group, dst):
         """
-        Send a new Join message
+        Send a new Join message (S,G)
         """
         tree = (source, group)
         with self.sequencer_lock:
@@ -757,7 +696,7 @@ class InterfaceProtocol(Interface):
 
     def send_prune(self, source, group,dst):
         """
-        Send a new Prune message
+        Send a new Prune message (S,G)
         """
 
         tree = (source, group)

@@ -10,6 +10,7 @@ from .upstream_state import SFMRPruneState, SFMRUpstreamStateABC
 from .root_state_machine import SFMRNewRootState  # SFMRRootState
 from .tree_interface import TreeInterface
 from .metric import AssertMetric, Metric
+from .assert_state import AssertState
 
 
 class TreeInterfaceUpstream(TreeInterface):
@@ -47,7 +48,10 @@ class TreeInterfaceUpstream(TreeInterface):
         if interest_state:
             self._upstream_node_interest_state = SFMRPruneState.UI
             if was_non_root:
-                self.send_assert_cancel()
+                if Main.kernel.assert_state_per_interface.get((self._kernel_entry.source_ip, self._interface_id), None) is not None and \
+                    Main.kernel.assert_state_per_interface.get((self._kernel_entry.source_ip, self._interface_id), None) != AssertState.NotAvailable:
+                    Main.kernel.assert_state_per_interface[(self._kernel_entry.source_ip, self._interface_id)] = AssertState.NotAvailable
+                    self.send_assert_cancel()
         else:
             self._upstream_node_interest_state = SFMRPruneState.NUI
 

@@ -43,9 +43,9 @@ class ReliableMessageTransmission(object):
             self._msg_multicast = Packet(payload=PacketProtocolHeader(ph, boot_time=bt))
 
             self.set_retransmission_timer()
-            self._interface.interface_logger.debug('Sending Assert message with BootTime: ' + str(bt) +
-                                    '; Tree: ' + str(source) + ' ,' + str(group) +
-                                    '; SN: ' + str(sn) + "\n")
+            # self._interface.interface_logger.debug('Sending Assert message with BootTime: ' + str(bt) +
+            #                         '; Tree: ' + str(source) + ' ,' + str(group) +
+            #                         '; SN: ' + str(sn) + "\n")
             self._interface.send(self._msg_multicast)
 
     def send_join(self, source, group, dst):
@@ -62,10 +62,10 @@ class ReliableMessageTransmission(object):
             self._msg_unicast[dst] = packet
 
             self.set_retransmission_timer()
-            self._interface.interface_logger.debug('Sending Join message with BootTime: ' + str(bt) +
-                                    '; Tree: ' + str(source) + ' ,' + str(group) +
-                                    '; SN: ' + str(sn) +
-                                    ' from neighbor ' + str(dst) + "\n")
+            # self._interface.interface_logger.debug('Sending Join message with BootTime: ' + str(bt) +
+            #                         '; Tree: ' + str(source) + ' ,' + str(group) +
+            #                         '; SN: ' + str(sn) +
+            #                         ' from neighbor ' + str(dst) + "\n")
             self._interface.send(packet, dst)
 
             if self._msg_multicast is not None:
@@ -85,10 +85,10 @@ class ReliableMessageTransmission(object):
             self._msg_unicast[dst] = packet
 
             self.set_retransmission_timer()
-            self._interface.interface_logger.debug('Sending Prune message with BootTime: ' + str(bt) +
-                                    '; Tree: ' + str(source) + ' ,' + str(group) +
-                                    '; SN: ' + str(sn) +
-                                    ' from neighbor ' + str(dst) + "\n")
+            # self._interface.interface_logger.debug('Sending Prune message with BootTime: ' + str(bt) +
+            #                         '; Tree: ' + str(source) + ' ,' + str(group) +
+            #                         '; SN: ' + str(sn) +
+            #                         ' from neighbor ' + str(dst) + "\n")
             self._interface.send(packet, dst)
 
             if self._msg_multicast is not None:
@@ -194,7 +194,7 @@ class ReliableMessageTransmission(object):
                 elif self._msg_multicast is not None:
                     # take note of all neighbors that have not acked the multicast msg
                     neighbors_not_acked = self.get_interface_neighbors() - self._neighbors_that_acked
-                    print("neighbour did not ack MULTICAST: " + str(neighbors_not_acked) + "\n\n")
+                    #print("neighbour did not ack MULTICAST: " + str(neighbors_not_acked) + "\n\n")
 
                 # didnt received acks from every neighbor... so lets resend msg and reschedule timer
                 msg = self._msg_multicast
@@ -205,7 +205,7 @@ class ReliableMessageTransmission(object):
                     if self._interface.is_neighbor(dst):
                         self._interface.send(msg, dst)
                         neighbors_not_acked.add(dst)  # take note of all neighbors that have not acked unicast messages
-                        print("neighbour did not ack unicast: " + str(neighbors_not_acked) + "\n\n")
+                        #print("neighbour did not ack unicast: " + str(neighbors_not_acked) + "\n\n")
                     else:
                         self.cancel_message_unicast(dst)
 

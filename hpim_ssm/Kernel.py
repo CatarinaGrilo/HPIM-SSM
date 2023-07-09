@@ -60,6 +60,12 @@ class Kernel:
 
         # KEY : source_ip, VALUE : {group_ip: KernelEntry}
         self.routing = {}
+        # KEY : (source_ip, vif_index) : {assert_state: AssertState}
+        self.assert_state_per_interface = {}
+        # KEY : (source_ip, vif_index) : {best_assert_neighbor}
+        self.best_assert_neighbor_per_interface = {}
+        # KEY : (source_ip, vif_index) : {RPC}
+        self.my_rpc = {}
 
         s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IGMP)
 
@@ -293,19 +299,18 @@ class Kernel:
 
         if not (source_ip in self.routing and group_ip in self.routing[source_ip]):
             return
-        
-        info_about_tree_can_be_removed = True
-        for interface in self.protocol_interface.values():
-            if not info_about_tree_can_be_removed:
-                break
-            for n in list(interface.neighbors.values()):
-                (neighbor_interest_state, neighbor_assert_state) = n.get_tree_state(tree=(source_ip, group_ip))
-                if neighbor_interest_state or neighbor_assert_state is not None:
+
+        with self.rwlock:
+            info_about_tree_can_be_removed = True
+            for interface in self.protocol_interface.values():
+                if not info_about_tree_can_be_removed:
+                    break
+                (neighbor_interest_state, neighbor_assert_state) = interface.get_tree_state(source_group=(source_ip, group_ip))
+                if neighbor_interest_state:
                     self.create_entry(kernel_entry.source_ip, kernel_entry.group_ip)
                     info_about_tree_can_be_removed = False
                     break
-                
-        with self.rwlock:
+
             if info_about_tree_can_be_removed:
                 self.interface_logger.debug("Removing multicast route")
                 try:
@@ -313,11 +318,19 @@ class Kernel:
                 except socket.error:
                     pass
                 if self.routing.get(kernel_entry.source_ip, None) is not None:
-                    if self.routing[kernel_entry.source_ip].get(kernel_entry.group_ip, None):
+                    if self.routing[kernel_entry.source_ip].get(kernel_entry.group_ip, None) is not None:
                         self.routing[kernel_entry.source_ip].pop(kernel_entry.group_ip)
                         kernel_entry.delete_state()
                         if len(self.routing[source_ip]) == 0:
                             self.routing.pop(source_ip)
+                groups = self.routing.get(source_ip, None)
+                if groups is not None:
+                    groups = groups.keys()
+                    if len(groups) == 0:
+                        self.assert_state_per_interface.pop((source_ip,group_ip),None)
+                        self.best_assert_neighbor_per_interface.pop((source_ip,group_ip), None)
+                        self.my_rpc.pop((source_ip,group_ip), None)
+
 
             # if info_about_tree_can_be_removed:
             #     for interface in self.protocol_interface.values():
@@ -351,10 +364,10 @@ class Kernel:
                 ip_dst = socket.inet_ntoa(im_dst)
 
                 if im_msgtype == Kernel.IGMPMSG_NOCACHE:
-                    print("IGMP NO CACHE")
+                    #print("IGMP NO CACHE")
                     self.igmpmsg_nocache_handler(ip_src, ip_dst, im_vif)
                 elif im_msgtype == Kernel.IGMPMSG_WRONGVIF:
-                    print("WRONG VIF HANDLER")
+                    #print("WRONG VIF HANDLER")
                     self.igmpmsg_wrongvif_handler(ip_src, ip_dst, im_vif)
                 #elif im_msgtype == Kernel.IGMPMSG_WHOLEPKT:
                 #    print("IGMP_WHOLEPKT")
@@ -413,41 +426,36 @@ class Kernel:
             interest_state, assert_state = interface.get_tree_state(source_group)
 
             if (ip_src not in self.routing) or (ip_dst not in self.routing.get(ip_src, {})):
-                self.interface_logger.debug('recv_int_1 ' + str(interface.ip_interface))
+                #self.interface_logger.debug('recv_int_1 ' + str(interface.ip_interface))
                 self.create_entry(ip_src, ip_dst)
 
             elif (ip_src in self.routing) and (ip_dst in self.routing[ip_src]):
-                self.interface_logger.debug('recv_int_2 ' + str(interface.ip_interface))
+                #self.interface_logger.debug('recv_int_2 ' + str(interface.ip_interface))
                 self.routing[ip_src][ip_dst].check_interface_state(interface.vif_index, interest_state, assert_state)
 
             else:
                 #self.interface_logger.debug('in recv_interest_msg_else')
                 interface.remove_tree_state(ip_src, ip_dst)
 
-    def recv_assert_msg(self, source_group, interface: "InterfaceProtocol"):
+    def recv_assert_msg(self, source, interface: "InterfaceProtocol"):
 
         #self.interface_logger.debug("ENTROU RCV ASSERT")
-        ip_src = source_group[0]
-        ip_dst = source_group[1]
+        
         #print("In recv_assert_msg interface: " + str(interface.ip_interface))
         with self.rwlock:
             if interface not in self.protocol_interface.values():
                 return
 
-            interest_state, assert_state = interface.get_tree_state(source_group)
+            groups = self.routing.get(source, None)
+            if groups is not None:
+                groups = groups.keys()
 
-            if (ip_src not in self.routing) or (ip_dst not in self.routing.get(ip_src, {})):
-                self.interface_logger.debug('ram1' + str(interface.ip_interface))
-                self.create_entry(ip_src, ip_dst)
-                self.routing[ip_src][ip_dst].check_interface_state(interface.vif_index, interest_state, assert_state)
-            elif (ip_src in self.routing) and (ip_dst in self.routing[ip_src]):
-                self.interface_logger.debug('ram2' + str(interface.ip_interface))
-                self.routing[ip_src][ip_dst].check_interface_state(interface.vif_index, interest_state, assert_state)
-            else:
-                self.interface_logger.debug('ram3' + str(interface.ip_interface))
-                interface.remove_tree_state(ip_src, ip_dst)
-
-        #self.interface_logger.debug("SAIU RCV ASSERT")
+                for group in groups:
+                    interest_state, assert_state = interface.get_tree_state((source,group))
+                    
+                    #self.interface_logger.debug('ram2 ' + str(interface.ip_interface))
+                    self.routing[source][group].check_interface_state(interface.vif_index, interest_state, assert_state)
+            #self.interface_logger.debug("SAIU RCV ASSERT")
 
     def create_entry(self, ip_src, ip_dst):
         (_, _, is_directly_connected, _, _) = UnicastRouting.get_unicast_info(ip_src)
@@ -478,15 +486,23 @@ class Kernel:
 
     def snapshot_multicast_routing_table(self, vif_index, neighbor_ip):
         trees_to_sync = {}
+        sources_to_sync = {}
         for (ip_src, src_dict) in self.routing.items():
             for (ip_dst, kernel_entry) in self.routing[ip_src].items():
                 tree = kernel_entry.get_interface_sync_state(vif_index, neighbor_ip)
 
-                if kernel_entry.get_tree_interface(vif_index).is_downstream() and tree is not False:
+                # if kernel_entry.get_tree_interface(vif_index).is_downstream() and tree is not False:
+                #     trees_to_sync[(ip_src, ip_dst)] = tree
+                if not kernel_entry.get_tree_interface(vif_index).is_downstream() and tree is None:
                     trees_to_sync[(ip_src, ip_dst)] = tree
-                elif not kernel_entry.get_tree_interface(vif_index).is_downstream() and tree is None:
-                    trees_to_sync[(ip_src, ip_dst)] = tree
-        return trees_to_sync
+
+        keys = self.my_rpc.keys()
+        for key in keys:
+            if kernel_entry.get_tree_interface(vif_index) is not None:
+                if vif_index in key and self.my_rpc.get((key[0], vif_index), None) is not None and\
+                    kernel_entry.get_tree_interface(vif_index).is_in_tree():
+                    sources_to_sync[(ip_src, '0.0.0.0')] = self.my_rpc.get((key[0], vif_index), None)
+        return trees_to_sync, sources_to_sync
 
 
     def recheck_all_trees(self, vif_index: int):
@@ -494,6 +510,7 @@ class Kernel:
             interface_name = self.vif_index_to_name_dic.get(vif_index, None)
             interface = self.protocol_interface.get(interface_name, None)
 
+            # For Interest
             known_trees = set()
             if interface is not None:
                 for n in list(interface.neighbors.values()):
@@ -513,7 +530,23 @@ class Kernel:
                     self.create_entry(tree[0], tree[1])
                 elif tree[0] in self.routing and tree[1] in self.routing[tree[0]]:
                     self.routing[tree[0]][tree[1]].check_interface_state(vif_index, interest_state, assert_state)
+            
+            # For Assert
+            known_sources = set()
+            if interface is not None:
+                for n in list(interface.neighbors.values()):
+                    known_sources = known_sources.union(n.get_known_sources())
 
+            for source in known_sources:
+                groups = self.routing.get(source, None)
+                if groups is not None:
+                    groups = groups.keys()
+
+                    for group in groups:
+                        interest_state, assert_state = interface.get_tree_state((source,group))
+                        
+                        #self.interface_logger.debug('ram2 ' + str(interface.ip_interface))
+                        self.routing[source][group].check_interface_state(interface.vif_index, interest_state, assert_state)
 
     def recheck_igmp_all_trees(self, vif_index: int):
         #print("ENTROU RECHECK IGMP")

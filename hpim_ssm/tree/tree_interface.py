@@ -19,7 +19,7 @@ class TreeInterface(metaclass=ABCMeta):
         self.logger = logger
         self.assert_logger = logging.LoggerAdapter(logger.logger.getChild('Assert'), logger.extra)
 
-        self._best_neighbor_metric = best_neighbor_metric  # current Assert Winner
+        Main.kernel.best_assert_neighbor_per_interface[(self._kernel_entry.source_ip, self._interface_id)] = best_neighbor_metric  # current Assert Winner
 
         # Local Membership State
         self._igmp_lock = RLock()
@@ -266,5 +266,6 @@ class TreeInterface(metaclass=ABCMeta):
         return
 
     def change_best_neighbor_metric(self, new_best_neighbor_metric):
-        self._best_neighbor_metric = new_best_neighbor_metric
+        
+        Main.kernel.best_assert_neighbor_per_interface[(self._kernel_entry.source_ip, self._interface_id)] = new_best_neighbor_metric
 

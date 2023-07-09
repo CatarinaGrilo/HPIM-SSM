@@ -24,21 +24,6 @@ def add_protocol_interface(interface_name):
     print("in Main: add protocol interface")
     kernel.create_protocol_interface(interface_name=interface_name)
 
-
-# def send_force_join(interface_name):
-#     print("\n\n\n---------------in send_force_join main------\n\n\n")
-#     print(interface_name)
-#     print("\n\n\n")
-#     interface = interfaces.get(interface_name)
-#     interface.force_send_join()
-
-
-# def send_force_prune(interface_name):
-#     print("in send_force_prune main")
-#     interface = interfaces.get(interface_name)
-#     interface.force_send_prune()
-
-
 def add_igmp_interface(interface_name):
     """
     Add a new interface to be controlled by IGMP
@@ -181,7 +166,7 @@ def list_routing_state():
             routing_entries.append(b)
     vif_indexes = kernel.vif_index_to_name_dic.keys()
 
-    t = PrettyTable(['SourceIP', 'GroupIP', 'Interface', 'InterestState', 'AssertState', "Is Forwarding?"])
+    t = PrettyTable(['SourceIP', 'GroupIP', 'Interface', 'InterestState (S,G)', 'AssertState (S,*)', "Is Forwarding? (S,G)"])
     for entry in routing_entries:
         ip = entry.source_ip
         group = entry.group_ip
@@ -193,19 +178,19 @@ def list_routing_state():
                 interface_state = entry.interface_state[index]
                 try:
                     if index != upstream_if_index:
-                        assert_state = str(interface_state._assert_state)
-                        prune_state = str(interface_state._downstream_node_interest_state)
+                        join_state= str(interface_state._downstream_node_interest_state)
                         is_forwarding = interface_state.is_forwarding()
+                        assert_state = str(kernel.assert_state_per_interface.get((ip, index), None))
                     else:
                         assert_state = "--"
-                        prune_state = str(interface_state._upstream_node_interest_state)
+                        join_state= str(interface_state._upstream_node_interest_state)
                         is_forwarding = "root"
                 except:
-                    prune_state = "-"
+                    join_state= "-"
                     assert_state = "-"
                     is_forwarding = "-"
 
-                t.add_row([ip, group, interface_name, prune_state, assert_state, is_forwarding])
+                t.add_row([ip, group, interface_name, join_state, assert_state, is_forwarding])
             else:
                 t.add_row([ip, group, interface_name, "NoUpstreamInterest", "--", "root"])
     return str(t)

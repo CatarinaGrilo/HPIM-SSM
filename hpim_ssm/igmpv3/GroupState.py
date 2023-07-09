@@ -23,7 +23,7 @@ class GroupState:
         # lock
         self.lock = Lock()
         self.group_timer = None
-        self.set_group_timer()
+        #self.set_group_timer()
         self.filter_mode = filter_mode
         # Key: str ip_address, Value: Timer object
         self.source_addresses = {}

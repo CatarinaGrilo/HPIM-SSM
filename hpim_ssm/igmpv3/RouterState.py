@@ -44,13 +44,7 @@ class RouterState(object):
         # send general query to all the routers, where S=0 | qrv=2 | QQIC=125
         packet = PacketIGMPv3HeaderQuery(0, 0, 2, 125, "0.0.0.0")
         igmp_pckt = PacketIGMPHeader(packet)
-        #
-        #
-        # Should be 224.0.0.22
-        #
-        #
-        #
-        self.interface.send(igmp_pckt.bytes(), "224.0.0.1")
+        self.interface.send(igmp_pckt.bytes(), "224.0.0.22")
         print("/*  *  *  *  *  *  *  *  *  *  *  *  *  *  */")
         print("Current Querier IP: {}".format(self.whoIsQuerier))
         # set initial general query timer 
@@ -113,7 +107,6 @@ class RouterState(object):
         packet = PacketIGMPv3HeaderQuery(0, 0, 2, QUERY_INTERVAL, "0.0.0.0")
         igmp_pckt = PacketIGMPHeader(packet)
         if self.interface_state == "Querier":
-            print("I AM THE QUERIER. WHAT IS YOUR STATUS?")
             self.interface.send(igmp_pckt.bytes(), "224.0.0.1")
             self.set_general_query_timer()
 
@@ -140,11 +133,7 @@ class RouterState(object):
             # send general query to all the routers, where S=0 | qrv=2 | QQIC=125
             packet = PacketIGMPv3HeaderQuery(0, 0, 2, 125, "0.0.0.0")
             igmp_pckt = PacketIGMPHeader(packet)
-            #
-            #
-            #
-            # Should be 224.0.0.22
-            self.interface.send(igmp_pckt.bytes(), "224.0.0.1")
+            self.interface.send(igmp_pckt.bytes(), "224.0.0.22")
             self.whoIsQuerier = self.interface.get_ip()
             print("Current Querier IP: {}".format(self.whoIsQuerier))
 
@@ -177,7 +166,6 @@ class RouterState(object):
         """
         Received IGMP Membership Report packet
         """
-        
         group_records = packet.payload.getPayload().group_records
         for group in group_records:
             mc_ip = group.getMulticastAddress()
